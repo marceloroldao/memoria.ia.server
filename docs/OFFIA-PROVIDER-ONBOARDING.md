@@ -68,7 +68,9 @@ A configuração manual de URL deve existir apenas para ambientes técnicos. Par
 - a OFF.IA não precisa conhecer a Central de Licenciamento para uso normal;
 - um provedor não enxerga clientes ou dispositivos de outro provedor.
 
-## Autonomia local
+## Propriedade e autonomia da memória
+
+A Memoria.ia pessoal pertence ao cliente final e é independente do provedor. O vínculo com um servidor concede serviços, mas não transfere propriedade sobre identidade, episódios, relações, preferências ou histórico pessoal.
 
 Depois da ativação, a OFF.IA deve continuar oferecendo suas funções locais quando estiver offline.
 
@@ -90,12 +92,12 @@ A arquitetura deve prever, futuramente:
 
 - desvinculação explícita;
 - revogação do certificado anterior;
-- exportação dos dados pertencentes ao cliente;
-- preservação das memórias estritamente locais;
+- exportação completa e versionada da memória pessoal;
+- preservação da identidade e de toda a Memoria.ia pessoal;
 - novo vínculo mediante autorização;
 - regras claras para dados fornecidos pelo provedor.
 
-Nenhum provedor deve conseguir assumir silenciosamente uma OFF.IA já vinculada.
+A troca substitui somente o vínculo com o provedor. Ela não recria nem apaga a identidade ou a memória pessoal. Nenhum provedor deve conseguir assumir silenciosamente uma OFF.IA já vinculada.
 
 ## Segurança mínima
 
