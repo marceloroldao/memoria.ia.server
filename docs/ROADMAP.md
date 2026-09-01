@@ -175,6 +175,28 @@ Critério de conclusão: o servidor sincroniza somente dados explicitamente auto
 
 O roteamento deve consumir contratos do `resolutive-routing`, sem colocar sua lógica dentro da shell.
 
+## Etapa 6A — Orquestração híbrida de modelos
+
+Objetivo: permitir ao provedor combinar recursos locais e APIs externas.
+
+- inventário de CPU, GPU, NPU e RAM;
+- catálogo de modelos locais;
+- runtime de LLM no servidor;
+- adaptadores OpenAI, Gemini e outros;
+- contrato comum de inferência;
+- políticas local estrito, local preferencial, qualidade e custo;
+- seleção contextual via `resolutive-routing`;
+- consentimento e classificação de privacidade;
+- fallback controlado;
+- limites por cliente, oferta e licença;
+- métricas de destino, latência, custo e carga;
+- chaves externas protegidas no servidor;
+- contexto mínimo preparado pela Memoria.ia.
+
+Critério de conclusão: a mesma solicitação pode ser encaminhada com segurança ao dispositivo, ao servidor local ou a uma API autorizada, e a decisão fica observável e reproduzível.
+
+Referência: [ADR-005 — Execução híbrida de modelos](architecture/ADR-005-HYBRID-MODEL-ROUTING.md).
+
 ## Etapa 7 — Fronteira de licenciamento
 
 O servidor recebe uma licença, mas não a emite.
