@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Memoria.ia Enterprise</title>
+  <link rel="stylesheet" href="/ui/style.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Memoria.ia Enterprise</h1>
+      <p>product-alpha · private memory service</p>
+    </div>
+    <div class="auth">
+      <label>Administrator API key <input id="apiKey" type="password" autocomplete="off" placeholder="X-Memoria-Key" /></label>
+      <button id="refreshAdmin">Refresh status</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel chat-panel">
+      <h2>Chat</h2>
+      <div class="grid two">
+        <label>Application ID <input id="applicationId" value="web" /></label>
+        <label>Memory keys <input id="memoryKeys" placeholder="customer.alpha.plan, invoice.status" /></label>
+      </div>
+      <label>Baseline context
+        <textarea id="baselineContext" rows="5" placeholder="Optional. One context block per line for baseline comparison."></textarea>
+      </label>
+      <label>Message
+        <textarea id="message" rows="5" placeholder="Ask a question..."></textarea>
+      </label>
+      <div class="actions">
+        <button id="sendMemoria">Send · Memoria mode</button>
+        <button id="compare">Compare baseline vs Memoria</button>
+      </div>
+      <pre id="answer" class="output">No request yet.</pre>
+    </section>
+
+    <section class="panel">
+      <h2>Request metrics</h2>
+      <div id="metrics" class="metrics"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Configuration</h2>
+      <h3>LLM provider</h3>
+      <div class="grid two">
+        <label>Provider
+          <select id="llmProvider">
+            <option value="mock">Mock / local test</option>
+            <option value="gemini">Gemini</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </label>
+        <label>Model <input id="llmModel" placeholder="gemini-2.5-flash or OpenAI model" /></label>
+      </div>
+      <label>Provider API key
+        <input id="llmApiKey" type="password" autocomplete="off" placeholder="Leave blank to keep the existing credential" />
+      </label>
+      <div class="actions">
+        <button id="saveLlmConfig">Save LLM configuration</button>
+        <button id="refreshConfiguration">Refresh configuration</button>
+      </div>
+      <pre id="llmConfigStatus" class="output">No configuration loaded.</pre>
+
+      <h3>License</h3>
+      <div class="grid two">
+        <label>License ID <input id="licenseId" placeholder="lic-early-access-001" /></label>
+        <label>Plan <input id="licensePlan" value="early_access" /></label>
+        <label>Valid until <input id="licenseValidUntil" placeholder="2027-08-23T00:00:00+00:00" /></label>
+        <label>Maximum nodes <input id="licenseMaxNodes" type="number" min="1" value="1" /></label>
+      </div>
+      <label>Capabilities <input id="licenseCapabilities" value="memory.read,memory.write,chat.use" /></label>
+      <button id="saveLicenseConfig">Save license metadata</button>
+      <pre id="licenseConfigStatus" class="output">No license loaded.</pre>
+      <p>Product-alpha validates local metadata only. Cryptographic license issuance/validation remains external.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Applications</h2>
+      <p>Create a credential for each application. The plaintext credential is displayed only once.</p>
+      <div class="grid two">
+        <label>Application ID <input id="newApplicationId" placeholder="crm" /></label>
+        <label>Display name <input id="newApplicationName" placeholder="Customer CRM" /></label>
+      </div>
+      <label>Scopes <input id="newApplicationScopes" value="memory.read,memory.write,chat.use" /></label>
+      <div class="actions">
+        <button id="createApplication">Create application credential</button>
+        <button id="refreshApplications">Refresh applications</button>
+      </div>
+      <pre id="newCredential" class="output">No credential created in this browser session.</pre>
+      <pre id="applications" class="output">Enter the administrator API key and refresh.</pre>
+    </section>
+
+    <section class="panel">
+      <h2>Administration</h2>
+      <pre id="admin" class="output">Enter the administrator API key and refresh.</pre>
+    </section>
+  </main>
+
+  <footer>
+    <span>Semantic routing remains experimental. Security status is shown by the server.</span>
+  </footer>
+  <script src="/ui/app.js"></script>
+</body>
+</html>
