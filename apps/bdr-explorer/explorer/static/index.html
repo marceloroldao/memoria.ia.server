@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Resolutive DB Explorer</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">BANCO DE DADOS RESOLUTIVO</p>
+      <h1>Resolutive DB Explorer</h1>
+    </div>
+    <div class="status"><span class="status-dot"></span><span id="health">conectando</span></div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="side-panel navigation-panel">
+      <div class="section-title">EXPLORER</div>
+      <label class="search-label" for="search">Buscar estado</label>
+      <input id="search" class="search" placeholder="ID, fingerprint ou payload">
+      <nav class="nav-list" aria-label="Áreas do Explorer">
+        <button class="nav-item active" type="button">Universe</button>
+        <button class="nav-item" type="button" disabled>Trajectories <small>planejado</small></button>
+        <button class="nav-item" type="button" disabled>Storage <small>parcial</small></button>
+        <button class="nav-item" type="button" disabled>Activity <small>planejado</small></button>
+        <button class="nav-item" type="button" disabled>Diagnostics <small>planejado</small></button>
+      </nav>
+      <div class="section-title">CAMADAS</div>
+      <div class="layer-card active-layer"><span class="layer-dot physical"></span><div><strong>Physical BDR</strong><small>endereço e estado físico</small></div></div>
+      <div class="layer-card muted-layer"><span class="layer-dot semantic"></span><div><strong>Semantic overlay</strong><small>Memoria.ia · futuro</small></div></div>
+      <div class="section-title">OBSERVAÇÃO FÍSICA</div>
+      <div id="capabilities" class="capabilities"><span class="capability-pending">carregando capacidades…</span></div>
+    </aside>
+
+    <section class="universe-shell">
+      <div class="universe-head">
+        <div>
+          <p class="eyebrow">UNIVERSE</p>
+          <h2>Espaço resolutivo</h2>
+        </div>
+        <div class="metrics compact" id="metrics"></div>
+      </div>
+      <div class="canvas-wrap">
+        <svg id="map" viewBox="0 0 1100 720" role="img" aria-label="Universo resolutivo"></svg>
+        <div class="projection-key"><span>ρR distância</span><span>θ direção</span><span>fν presença</span></div>
+      </div>
+    </section>
+
+    <aside class="side-panel inspector">
+      <div class="section-title">INSPECTOR</div>
+      <div id="inspector-empty" class="empty-state">Selecione um nódulo no universo.</div>
+      <dl id="inspector" hidden></dl>
+    </aside>
+  </main>
+
+  <footer>
+    <span id="version">BDR</span>
+    <span>Explorer v0.1 · somente leitura · contratos públicos</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
