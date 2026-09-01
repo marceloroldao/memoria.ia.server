@@ -103,6 +103,24 @@ Critério de conclusão: nenhuma operação administrativa sensível ocorre sem 
 
 Regra: o Explorer nunca analisa diretamente WAL, snapshots ou internals para inventar telemetria ausente.
 
+## Etapa 3A — Portabilidade da memória pessoal
+
+Objetivo: garantir que a Memoria.ia pertença ao cliente e sobreviva à troca de provedor.
+
+- identidade pessoal independente do servidor;
+- memória pessoal separada do vínculo comercial;
+- exportação e importação versionadas;
+- backup criptografado controlado pelo cliente;
+- proveniência entre memória pessoal, conteúdo do provedor e dados operacionais;
+- revogação do vínculo sem apagar a memória;
+- funcionamento local sem provedor;
+- consentimento antes de sincronizar com novo provedor;
+- testes automáticos de migração e restauração.
+
+Critério de conclusão: trocar o `ProviderBinding` sem alterar a `PersonalIdentity` ou perder a `PersonalMemory`.
+
+Referência: [ADR-004 — Portabilidade da memória pessoal](architecture/ADR-004-PERSONAL-MEMORY-PORTABILITY.md).
+
 ## Etapa 4 — Sincronização seletiva
 
 Escopos previstos:
