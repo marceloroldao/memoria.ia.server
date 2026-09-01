@@ -1,0 +1,88 @@
+:root {
+  color-scheme: dark;
+  --bg: #050914;
+  --surface: #0b1324;
+  --surface-2: #101b30;
+  --line: #203454;
+  --text: #edf7ff;
+  --muted: #91a6bc;
+  --cyan: #23d9ff;
+  --blue: #3978ff;
+  --green: #51e2a7;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(35,217,255,.12), transparent 32rem),
+    radial-gradient(circle at 90% 65%, rgba(57,120,255,.12), transparent 35rem),
+    var(--bg);
+  color: var(--text);
+  font: 16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+}
+.topbar {
+  min-height: 74px;
+  padding: 14px clamp(20px, 4vw, 64px);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(5,9,20,.82);
+}
+.brand, .health { display: flex; align-items: center; gap: 12px; }
+.brand div { display: grid; }
+.brand span, .health { color: var(--muted); font-size: .875rem; }
+.brand-mark {
+  width: 38px; height: 38px; border: 2px solid var(--cyan); border-radius: 50%;
+  box-shadow: inset 0 0 18px rgba(35,217,255,.35), 0 0 20px rgba(35,217,255,.18);
+  position: relative;
+}
+.brand-mark::after { content: ""; position: absolute; inset: 12px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 16px var(--cyan); }
+.health > span:first-child { width: 9px; height: 9px; border-radius: 50%; background: #f4b860; }
+.health > span:first-child[data-state="online"] { background: var(--green); box-shadow: 0 0 12px var(--green); }
+.health > span:first-child[data-state="offline"] { background: #ff6b7a; }
+main { width: min(1180px, calc(100% - 36px)); margin: 0 auto; padding: clamp(48px, 7vw, 90px) 0 48px; }
+.intro { max-width: 790px; margin-bottom: 42px; }
+.eyebrow, .module-owner { margin: 0 0 8px; color: var(--cyan); font-size: .75rem; font-weight: 800; letter-spacing: .18em; }
+h1 { margin: 0; font-size: clamp(2rem, 5vw, 4.2rem); line-height: 1.04; letter-spacing: -.04em; }
+.intro > p:last-child { max-width: 650px; color: var(--muted); font-size: 1.08rem; }
+.modules { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.module {
+  min-height: 260px; padding: 28px; border: 1px solid var(--line); border-radius: 18px;
+  background: linear-gradient(145deg, rgba(16,27,48,.96), rgba(8,15,29,.96));
+  color: inherit; text-decoration: none; display: grid; grid-template-columns: 62px 1fr; gap: 20px;
+  position: relative; transition: transform .18s ease, border-color .18s ease;
+}
+.module:hover, .module:focus-visible { transform: translateY(-3px); border-color: var(--cyan); outline: none; }
+.module-icon {
+  width: 58px; height: 58px; border: 1px solid var(--cyan); border-radius: 15px;
+  display: grid; place-items: center; color: var(--cyan); font-weight: 800;
+}
+.module h2 { margin: 0 0 8px; font-size: 1.75rem; }
+.module p:last-child { color: var(--muted); }
+.module-state {
+  position: absolute; right: 24px; bottom: 22px; color: #f4b860; font-size: .8rem;
+}
+.module-state[data-state="online"] { color: var(--green); }
+.module-state[data-state="offline"] { color: #ff7d89; }
+.boundary {
+  margin-top: 24px; padding: 24px 28px; border: 1px solid var(--line); border-radius: 16px;
+  display: grid; grid-template-columns: 1fr 90px 1fr; align-items: center; background: rgba(11,19,36,.62);
+}
+.boundary div { display: grid; }
+.boundary div:last-child { text-align: right; }
+.boundary span { color: var(--muted); font-size: .875rem; }
+.connector { height: 1px; background: linear-gradient(90deg, var(--cyan), var(--blue)); position: relative; }
+.connector::before, .connector::after { content: ""; position: absolute; top: -4px; width: 9px; height: 9px; border-radius: 50%; background: var(--cyan); }
+.connector::after { right: 0; background: var(--blue); }
+footer { padding: 24px; color: var(--muted); text-align: center; font-size: .8rem; }
+@media (max-width: 760px) {
+  .health { display: none; }
+  .modules { grid-template-columns: 1fr; }
+  .module { grid-template-columns: 48px 1fr; padding: 22px; min-height: 240px; }
+  .module-icon { width: 46px; height: 46px; }
+  .boundary { grid-template-columns: 1fr; gap: 18px; }
+  .boundary div:last-child { text-align: left; }
+  .connector { width: 70px; }
+}
