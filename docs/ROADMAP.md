@@ -1,0 +1,235 @@
+# Roadmap — Memoria.ia Server
+
+Status: planejamento evolutivo
+
+## Visão
+
+O Memoria.ia Server será instalado e operado por provedores, empresas ou organizações para centralizar a administração de suas OFF.IAs e de outros dispositivos internos.
+
+Cada servidor preserva a autonomia local do ecossistema:
+
+- OFF.IA continua funcionando offline;
+- Memoria.ia continua dona da memória, semântica e estado lógico;
+- BDR continua dono da persistência;
+- o servidor coordena dispositivos, sincronização autorizada, observabilidade e roteamento;
+- o servidor não é a autoridade comercial que emite sua própria licença.
+
+A licença principal será emitida por uma camada administrativa superior, desenvolvida futuramente em sistema separado.
+
+## Arquitetura em camadas
+
+```text
+Central de licenciamento futura
+        |
+        | licencia, renova, suspende e define limites
+        v
+Memoria.ia Server do provedor
+        |
+        | registra e administra internamente
+        v
+OFF.IAs, computadores, servidores, robôs e dispositivos IoT
+```
+
+## Etapa 0 — Base modular
+
+Estado: concluída
+
+- repositório `memoria.ia.server`;
+- Memoria Admin importado;
+- BDR Explorer importado;
+- módulos tecnicamente separados;
+- contratos e adaptadores em diretórios próprios;
+- server shell com entrada unificada;
+- namespaces de API independentes;
+- health agregado;
+- validação de Python e JavaScript.
+
+## Etapa 1 — Registro interno de dispositivos
+
+Objetivo: permitir que cada servidor administre seus próprios nós.
+
+- identidade única do servidor;
+- cadastro e aprovação de dispositivos;
+- `device_id` vinculado ao `server_id`;
+- chave pública por dispositivo;
+- certificado interno assinado pelo servidor;
+- tipos: OFF.IA, celular, computador, servidor, robô, sensor e IoT;
+- capacidades declaradas: CPU, GPU, NPU, RAM e armazenamento;
+- modelos locais disponíveis;
+- versões de OFF.IA, Memoria.ia e BDR;
+- estados: pendente, ativo, suspenso e revogado;
+- última conexão e estado online/offline;
+- grupos, nomes e permissões internas;
+- limite local preparado para receber `max_devices` da licença.
+
+Critério de conclusão: registrar, aprovar, listar, suspender e revogar dispositivos sem depender da futura central comercial.
+
+## Etapa 2 — Segurança e administração local
+
+- usuários administradores;
+- funções e escopos;
+- autenticação forte;
+- comunicação criptografada;
+- rotação e revogação de chaves;
+- auditoria;
+- isolamento entre organizações ou ambientes;
+- proteção de segredos;
+- política de conteúdo e payload;
+- limites de requisição;
+- backup de configuração.
+
+Critério de conclusão: nenhuma operação administrativa sensível ocorre sem identidade, autorização e auditoria.
+
+## Etapa 3 — Memoria Explorer e BDR Explorer integrados
+
+### Memoria Explorer
+
+- conceitos e relações;
+- episódios e padrões;
+- trajetórias de recuperação;
+- candidatos selecionados e rejeitados;
+- origem e confiança;
+- camadas e abstrações;
+- memórias utilizadas em cada resposta.
+
+### BDR Explorer
+
+- registros e endereços resolutivos;
+- estatísticas físicas;
+- capacidades públicas;
+- telemetria de persistência quando existir contrato público;
+- integridade, checkpoint e recuperação por contrato;
+- operação inicialmente read-only.
+
+Regra: o Explorer nunca analisa diretamente WAL, snapshots ou internals para inventar telemetria ausente.
+
+## Etapa 4 — Sincronização seletiva
+
+Escopos previstos:
+
+- `local`: nunca sai do dispositivo;
+- `personal`: dispositivos do mesmo proprietário;
+- `family`;
+- `team`;
+- `organization`;
+- `ma2a`;
+- `public`.
+
+Funcionalidades:
+
+- sincronização incremental;
+- conflitos e proveniência;
+- autorização por escopo;
+- criptografia;
+- funcionamento offline;
+- retomada após desconexão;
+- backup e restauração;
+- retenção configurável.
+
+Critério de conclusão: o servidor sincroniza somente dados explicitamente autorizados e o dispositivo continua operando sem conexão.
+
+## Etapa 5 — Observabilidade e atualização
+
+- dispositivos online/offline;
+- versões e compatibilidade;
+- uso de CPU, GPU, NPU, RAM e armazenamento;
+- latência;
+- acertos e falhas de memória;
+- tokens evitados;
+- crescimento do BDR;
+- alertas;
+- atualização assinada;
+- implantação gradual;
+- retorno seguro à versão anterior.
+
+## Etapa 6 — Resolutive Routing
+
+- resolução local prioritária;
+- descoberta de memória autorizada;
+- seleção de nó por capacidade;
+- carga, latência e distância;
+- privacidade;
+- custo;
+- reputação;
+- modelo local disponível;
+- fallback controlado;
+- integração futura com MA2A.
+
+O roteamento deve consumir contratos do `resolutive-routing`, sem colocar sua lógica dentro da shell.
+
+## Etapa 7 — Fronteira de licenciamento
+
+O servidor recebe uma licença, mas não a emite.
+
+Preparação interna:
+
+- interface `LicenseProvider`;
+- estado da licença;
+- `server_id` e `organization_id`;
+- plano;
+- validade;
+- funcionalidades liberadas;
+- limites de dispositivos e administradores;
+- período de tolerância offline;
+- aviso de renovação;
+- bloqueio gradual e seguro;
+- cache de certificado assinado;
+- nenhuma regra de pagamento dentro do servidor.
+
+Critério de conclusão: um provedor externo de licença pode ser conectado sem alterar os módulos de domínio.
+
+## Etapa 8 — Central administrativa futura
+
+Será desenvolvida em outro sistema e, quando oportuno, outro repositório.
+
+Responsabilidades:
+
+- cadastro de provedores;
+- organizações;
+- instalações de Memoria.ia Server;
+- planos;
+- emissão e renovação de certificados;
+- suspensão e revogação;
+- pagamentos e faturamento;
+- suporte;
+- limites contratados;
+- métricas comerciais;
+- royalties;
+- contratos Enterprise.
+
+Não pertencem ao Memoria.ia Server:
+
+- venda de planos;
+- cobrança;
+- emissão da licença comercial principal;
+- cadastro global de clientes;
+- alteração dos próprios limites;
+- administração comercial de outros provedores.
+
+## Etapa 9 — Escala e alta disponibilidade
+
+- múltiplos servidores do mesmo provedor;
+- filiais e regiões;
+- replicação;
+- failover;
+- balanceamento;
+- políticas hierárquicas;
+- observabilidade consolidada;
+- recuperação de desastre;
+- clusters;
+- integração MA2A.
+
+## Etapa 10 — Economia de recursos da rede
+
+Fase posterior à identidade, medição, privacidade e roteamento:
+
+- medição de recursos consumidos;
+- capacidade ociosa;
+- créditos de processamento;
+- devolução de capacidade;
+- regras de reputação;
+- auditoria;
+- isolamento de tarefas;
+- política comercial externa.
+
+Esta etapa não deve ser implementada antes de existirem segurança, medição verificável e contratos comerciais.
