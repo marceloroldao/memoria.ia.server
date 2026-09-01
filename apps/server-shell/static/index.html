@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Memoria.ia Server</title>
+  <meta name="description" content="Gerenciamento da Memoria.ia e observabilidade do Resolutive DB">
+  <link rel="stylesheet" href="/shell.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <strong>Memoria.ia Server</strong>
+        <span>central de gerenciamento</span>
+      </div>
+    </div>
+    <div class="health" aria-live="polite"><span id="healthDot"></span><span id="healthText">verificando serviços</span></div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <p class="eyebrow">AMBIENTE RESOLUTIVO</p>
+      <h1>Memória lógica e persistência física, observadas no mesmo lugar.</h1>
+      <p>Os módulos compartilham esta entrada, mas preservam contratos, rotas e evolução independentes.</p>
+    </section>
+
+    <section class="modules" aria-label="Módulos">
+      <a class="module memoria" href="/admin/memoria">
+        <div class="module-icon">M</div>
+        <div>
+          <p class="module-owner">MEMORIA.IA</p>
+          <h2>Gerenciamento</h2>
+          <p>Aplicações, credenciais, configuração, métricas e operação do serviço de memória.</p>
+        </div>
+        <span class="module-state" id="memoriaState">verificando</span>
+      </a>
+
+      <a class="module bdr" href="/explorer/bdr">
+        <div class="module-icon">BDR</div>
+        <div>
+          <p class="module-owner">RESOLUTIVE DB</p>
+          <h2>Explorer</h2>
+          <p>Universo resolutivo, entidades, capacidades observáveis e estado físico publicado pelo BDR.</p>
+        </div>
+        <span class="module-state" id="bdrState">verificando</span>
+      </a>
+    </section>
+
+    <section class="boundary">
+      <div><strong>Memoria.ia</strong><span>semântica, contexto e estado lógico</span></div>
+      <span class="connector" aria-hidden="true"></span>
+      <div><strong>BDR</strong><span>persistência e endereço físico</span></div>
+    </section>
+  </main>
+
+  <footer>Shell de composição · módulos independentes · Explorer somente leitura</footer>
+  <script src="/shell.js"></script>
+</body>
+</html>
