@@ -17,8 +17,8 @@ from config import ShellConfig
 
 ROOT = Path(__file__).resolve().parents[2]
 SHELL_STATIC = Path(__file__).with_name("static")
-MEMORIA_STATIC = ROOT / "memoria-admin" / "static"
-BDR_STATIC = ROOT / "bdr-explorer" / "explorer" / "static"
+MEMORIA_STATIC = APPS_DIR / "memoria-admin" / "static"
+BDR_STATIC = APPS_DIR / "bdr-explorer" / "explorer" / "static"
 
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -156,7 +156,7 @@ class ShellHandler(BaseHTTPRequestHandler):
             return {"status": "offline"}
 
     def _health(self) -> None:
-        memoria = self._component_health(self.config.memoria_api_url, "/health")
+        memoria = self._component_health(self.config.memoria_api_url, "/api/v1/health")
         bdr = self._component_health(self.config.bdr_explorer_url, "/api/health")
         states = {memoria["status"], bdr["status"]}
         overall = "online" if states == {"online"} else "degraded"
