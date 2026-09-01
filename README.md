@@ -52,3 +52,4 @@ Base de integração inicial. O objetivo imediato é preservar o que já funcion
 
 - [OFF.IA como serviço do provedor](docs/OFFIA-PROVIDER-ONBOARDING.md)
 - [Decisão arquitetural do serviço OFF.IA](docs/architecture/ADR-003-OFFIA-PROVIDER-SERVICE.md)
+- [Memória pessoal e portabilidade entre provedores](docs/architecture/ADR-004-PERSONAL-MEMORY-PORTABILITY.md)
