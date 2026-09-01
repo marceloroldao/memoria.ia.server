@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 from config import ShellConfig
 
 
-ROOT = Path(__file__).resolve().parents[2]
+APPS_DIR = Path(__file__).resolve().parents[1]
 SHELL_STATIC = Path(__file__).with_name("static")
 MEMORIA_STATIC = APPS_DIR / "memoria-admin" / "static"
 BDR_STATIC = APPS_DIR / "bdr-explorer" / "explorer" / "static"
