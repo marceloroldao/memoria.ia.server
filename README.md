@@ -43,3 +43,9 @@ Os arquivos importados mantêm sua origem documentada em `docs/architecture/MIGR
 ## Estado
 
 Base de integração inicial. O objetivo imediato é preservar o que já funciona, unificar a navegação e estabelecer contratos que permitam evolução independente.
+
+## Planejamento
+
+- [Roadmap de evolução](docs/ROADMAP.md)
+- [Fronteira de licenciamento](docs/architecture/ADR-002-LICENSING-BOUNDARY.md)
+- [Rascunho dos planos](docs/PLANS_DRAFT.md)
