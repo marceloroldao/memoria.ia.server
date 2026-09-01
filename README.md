@@ -49,3 +49,6 @@ Base de integração inicial. O objetivo imediato é preservar o que já funcion
 - [Roadmap de evolução](docs/ROADMAP.md)
 - [Fronteira de licenciamento](docs/architecture/ADR-002-LICENSING-BOUNDARY.md)
 - [Rascunho dos planos](docs/PLANS_DRAFT.md)
+
+- [OFF.IA como serviço do provedor](docs/OFFIA-PROVIDER-ONBOARDING.md)
+- [Decisão arquitetural do serviço OFF.IA](docs/architecture/ADR-003-OFFIA-PROVIDER-SERVICE.md)
