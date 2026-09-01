@@ -1,0 +1,14 @@
+{
+  "name": "@memoria-ia/admin",
+  "version": "0.1.0",
+  "type": "web-application",
+  "routes": {
+    "ui": "/admin/memoria",
+    "apiPrefix": "/api/v1"
+  },
+  "owner": "memoria.ia",
+  "dependencies": [
+    "memoria-public-api"
+  ],
+  "extractionReady": false
+}
