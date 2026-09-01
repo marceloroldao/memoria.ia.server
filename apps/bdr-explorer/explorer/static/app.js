@@ -124,9 +124,9 @@ function applySearch() {
 async function start() {
   try {
     const [health, snapshot, observation] = await Promise.all([
-      fetch("/api/health", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/snapshot", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/observation", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/bdr-explorer/v1/health", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/bdr-explorer/v1/snapshot", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/bdr-explorer/v1/observation", { cache: "no-store" }).then((r) => r.json()),
     ]);
     $("#health").textContent = health.status === "ok" ? "BDR conectado" : "estado desconhecido";
     snapshotCache = snapshot;
