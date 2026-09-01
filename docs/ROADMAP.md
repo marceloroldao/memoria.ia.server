@@ -233,3 +233,23 @@ Fase posterior à identidade, medição, privacidade e roteamento:
 - política comercial externa.
 
 Esta etapa não deve ser implementada antes de existirem segurança, medição verificável e contratos comerciais.
+
+## Etapa 1A — Oferta da OFF.IA pelo provedor
+
+Objetivo: permitir que o provedor entregue a OFF.IA como serviço aos seus clientes.
+
+- cadastro interno de clientes;
+- convites de ativação;
+- QR Code, link ou código curto;
+- descoberta segura do servidor;
+- identidade visual e suporte do provedor;
+- associação cliente–dispositivo–servidor;
+- ofertas internas criadas pelo provedor;
+- permissões derivadas do plano interno do cliente;
+- desvinculação e revogação;
+- preparação para troca segura de provedor;
+- funcionamento local após a ativação.
+
+Critério de conclusão: um cliente baixa a OFF.IA, informa os dados recebidos do provedor e conclui a vinculação sem precisar acessar a futura Central de Licenciamento.
+
+Referência: [OFF.IA como serviço do provedor](OFFIA-PROVIDER-ONBOARDING.md).
