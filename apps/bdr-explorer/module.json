@@ -1,0 +1,15 @@
+{
+  "name": "@resolutive/bdr-explorer",
+  "version": "0.1.0",
+  "type": "web-application",
+  "routes": {
+    "ui": "/explorer/bdr",
+    "apiPrefix": "/api/bdr-explorer/v1"
+  },
+  "owner": "resolutive-DB",
+  "mode": "read-only",
+  "dependencies": [
+    "bdr-public-api"
+  ],
+  "extractionReady": false
+}
