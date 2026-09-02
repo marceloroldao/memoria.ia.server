@@ -24,13 +24,19 @@
   <h2>Configurações</h2>
   <p>Seu login no Memoria.ia Server já autoriza esta área. A chave técnica permanece protegida no servidor.</p>
   <div class="status-row"><strong id="admin">Conectando…</strong><button id="refreshAdmin" type="button">Atualizar estado</button></div>
-  <h3>Modelo de IA</h3>
-  <label>Provedor<select id="llmProvider"><option value="mock">Mock / teste local</option><option value="gemini">Gemini</option><option value="openai">OpenAI</option></select></label>
-  <label>Modelo<input id="llmModel" placeholder="Ex.: gpt-5.6-luna"></label>
-  <label>Chave do provedor<input id="llmApiKey" type="password" autocomplete="new-password" placeholder="Deixe vazio para manter a chave atual"></label>
-  <button id="saveLlmConfig">Salvar configuração</button>
-  <p id="restartNotice" class="notice" hidden>Configuração salva. Reinicie o serviço Memoria.ia para ativar o novo modelo.</p>
-  <pre id="llmConfigStatus" class="output">Carregando…</pre>
+  <h3>Catálogo de modelos</h3>
+  <p>Cadastre vários modelos e escolha o ativo sem apagar os demais. As credenciais são write-only e ficam separadas por perfil.</p>
+  <div class="model-form">
+    <label>Nome do perfil<input id="modelProfileName" placeholder="Ex.: GPT principal"></label>
+    <label>Provedor<select id="modelProvider"><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="llama">Llama local</option></select></label>
+    <label>Modelo<input id="modelName" placeholder="Ex.: gpt-5.6-luna"></label>
+    <label>URL compatível<input id="modelBaseUrl" placeholder="Opcional; o padrão do provedor será usado"></label>
+    <label id="modelApiKeyLabel">Chave do provedor<input id="modelApiKey" type="password" autocomplete="new-password" placeholder="A chave não será exibida novamente"></label>
+    <button id="saveModelProfile" type="button">Adicionar modelo</button>
+  </div>
+  <p id="restartNotice" class="notice" hidden>Modelo ativado. Na primeira migração para o catálogo, execute <code>docker compose restart memoria</code> uma vez.</p>
+  <div id="modelsList" class="models-list"><p>Carregando catálogo…</p></div>
+  <details><summary>Estado técnico atual da Memoria.ia</summary><pre id="llmConfigStatus" class="output">Carregando…</pre></details>
 </section>
 <section id="page-diagnostics" class="page panel">
   <h2>Diagnóstico</h2><p>Use esta área somente para testes e suporte.</p><div id="metrics" class="metrics"></div>
