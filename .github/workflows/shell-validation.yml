@@ -4,13 +4,19 @@ on:
   push:
     paths:
       - "apps/server-shell/**"
+      - "apps/model-gateway/**"
       - "apps/memoria-admin/static/**"
+      - "docker/model-gateway/**"
+      - "compose.yaml"
       - "apps/bdr-explorer/explorer/static/**"
       - ".github/workflows/shell-validation.yml"
   pull_request:
     paths:
       - "apps/server-shell/**"
+      - "apps/model-gateway/**"
       - "apps/memoria-admin/static/**"
+      - "docker/model-gateway/**"
+      - "compose.yaml"
       - "apps/bdr-explorer/explorer/static/**"
 
 permissions:
@@ -29,7 +35,10 @@ jobs:
           node-version: "22"
       - run: python -m pip install pytest
       - run: python -m pytest apps/server-shell/tests -q
+      - run: python -m pytest apps/model-gateway/tests -q
       - run: python -m compileall -q apps/server-shell apps/bdr-explorer/explorer
+      - run: python -m compileall -q apps/model-gateway
       - run: node --check apps/server-shell/static/shell.js
       - run: node --check apps/memoria-admin/static/app.js
       - run: node --check apps/bdr-explorer/explorer/static/app.js
+      - run: docker compose config --quiet
