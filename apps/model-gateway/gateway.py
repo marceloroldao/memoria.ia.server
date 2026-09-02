@@ -202,12 +202,19 @@ class ModelStore:
             self._write(self.catalog_path, catalog, secret=False)
 
 
-def request_json(url: str, payload: dict, headers: dict[str, str], timeout: float) -> tuple[int, dict]:
+def request_json(
+    url: str,
+    payload: dict,
+    headers: dict[str, str],
+    timeout: float,
+    *,
+    method: str = "POST",
+) -> tuple[int, dict]:
     request = Request(
         url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json", **headers},
-        method="POST",
+        method=method,
     )
     try:
         with urlopen(request, timeout=timeout) as response:
@@ -315,6 +322,7 @@ class GatewayHandler(BaseHTTPRequestHandler):
             payload,
             {"X-Memoria-Key": self.memoria_key},
             self.timeout,
+            method="PUT",
         )
         return True
 
@@ -402,11 +410,11 @@ class GatewayHandler(BaseHTTPRequestHandler):
                 self.write_json(200, {"deleted": True, "profile_id": parts[0]})
                 return
             if len(parts) == 2 and parts[1] == "activate" and self.command == "POST":
-                profile = self.store.activate(parts[0])
                 restart_required = not self.store.gateway_configured()
                 if restart_required:
                     self.ensure_memoria_gateway()
                     self.store.mark_gateway_configured()
+                profile = self.store.activate(parts[0])
                 self.write_json(
                     200,
                     {
