@@ -1,0 +1,28 @@
+{
+  "schema": "memoria-ia-server-release/v1",
+  "version": "0.1.0-alpha.1",
+  "channel": "private-alpha",
+  "components": {
+    "memoria.ia": {
+      "version": "1.0.0rc2",
+      "commit": "162604240f22cfab6449ebe48f4eb764d6e76d0c"
+    },
+    "resolutive-db": {
+      "version": "1.1.0",
+      "commit": "1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e"
+    },
+    "server-shell": {
+      "version": "0.1.0-alpha.1"
+    },
+    "bdr-explorer": {
+      "version": "0.1.0",
+      "mode": "demo-read-only"
+    }
+  },
+  "deployment": {
+    "method": "docker-compose",
+    "entrypoint": "scripts/install.sh",
+    "port": 8780
+  },
+  "maturity": "controlled-test-only"
+}
