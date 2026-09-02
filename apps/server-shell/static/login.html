@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Entrar · Memoria.ia Server</title>
+  <meta name="description" content="Acesso administrativo ao Memoria.ia Server">
+  <link rel="stylesheet" href="/login.css">
+</head>
+<body>
+  <main class="login-shell">
+    <section class="login-card" aria-labelledby="loginTitle">
+      <div class="brand-mark" aria-hidden="true"></div>
+      <p class="eyebrow">MEMORIA.IA SERVER</p>
+      <h1 id="loginTitle">Acesso administrativo</h1>
+      <p class="intro">Entre com as credenciais configuradas neste servidor.</p>
+      <form id="loginForm">
+        <label for="username">Usuário</label>
+        <input id="username" name="username" autocomplete="username" required autofocus>
+        <label for="password">Senha</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button id="submitButton" type="submit">Entrar</button>
+        <p id="error" class="error" role="alert" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+  <script src="/login.js"></script>
+</body>
+</html>
