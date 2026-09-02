@@ -38,3 +38,20 @@ def test_web_ui_does_not_embed_server_secret(tmp_path):
         response = client.get(path)
         assert response.status_code == 200
         assert "server-only-secret" not in response.text
+
+
+def test_server_admin_chat_keeps_bdr_history_contract_in_static_assets():
+    from pathlib import Path
+
+    static = Path(__file__).resolve().parents[1] / "static"
+    html = (static / "index.html").read_text(encoding="utf-8")
+    js = (static / "app.js").read_text(encoding="utf-8")
+    css = (static / "style.css").read_text(encoding="utf-8")
+
+    assert 'id="conversationHistory"' in html
+    assert 'id="newConversation"' in html
+    assert "/api/v1/episodes/history?event_type=chat_turn" in js
+    assert "openPersistedConversation" in js
+    assert "loadConversationHistory" in js
+    assert ".history-panel" in css
+    assert ".history-item.active" in css
