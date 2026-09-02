@@ -9,10 +9,16 @@
   <div class="composer"><textarea id="message" rows="3" placeholder="Digite sua mensagem..."></textarea><button id="sendMemoria">Enviar</button></div></div>
 </section>
 <section id="page-settings" class="page panel">
-  <h2>Configurações</h2><p>Estas opções são administrativas e não são necessárias durante uma conversa normal.</p>
-  <label>Chave de administrador<input id="apiKey" type="password" autocomplete="off" placeholder="MEMORIA_API_KEY"></label><button id="refreshAdmin">Conectar</button><pre id="admin" class="output">Não conectado.</pre>
-  <h3>Modelo de IA</h3><label>Provedor<select id="llmProvider"><option value="mock">Mock / teste local</option><option value="gemini">Gemini</option><option value="openai">OpenAI</option></select></label><label>Modelo<input id="llmModel"></label><label>Chave do provedor<input id="llmApiKey" type="password"></label><button id="saveLlmConfig">Salvar configuração</button><pre id="llmConfigStatus" class="output">Não carregado.</pre>
-  <input id="applicationId" type="hidden" value="web"><input id="memoryKeys" type="hidden" value=""><input id="baselineContext" type="hidden" value="">
+  <h2>Configurações</h2>
+  <p>Seu login no Memoria.ia Server já autoriza esta área. A chave técnica permanece protegida no servidor.</p>
+  <div class="status-row"><strong id="admin">Conectando…</strong><button id="refreshAdmin" type="button">Atualizar estado</button></div>
+  <h3>Modelo de IA</h3>
+  <label>Provedor<select id="llmProvider"><option value="mock">Mock / teste local</option><option value="gemini">Gemini</option><option value="openai">OpenAI</option></select></label>
+  <label>Modelo<input id="llmModel" placeholder="Ex.: gpt-5.6-luna"></label>
+  <label>Chave do provedor<input id="llmApiKey" type="password" autocomplete="new-password" placeholder="Deixe vazio para manter a chave atual"></label>
+  <button id="saveLlmConfig">Salvar configuração</button>
+  <p id="restartNotice" class="notice" hidden>Configuração salva. Reinicie o serviço Memoria.ia para ativar o novo modelo.</p>
+  <pre id="llmConfigStatus" class="output">Carregando…</pre>
 </section>
 <section id="page-diagnostics" class="page panel">
   <h2>Diagnóstico</h2><p>Use esta área somente para testes e suporte.</p><div id="metrics" class="metrics"></div>
