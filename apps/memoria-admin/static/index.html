@@ -5,8 +5,20 @@
 <header><div><h1>Memoria.ia</h1><p>Memória local para IA</p></div><nav><button class="nav active" data-page="chat">Chat</button><button class="nav" data-page="settings">Configurações</button><button class="nav" data-page="diagnostics">Diagnóstico</button></nav></header>
 <main>
 <section id="page-chat" class="page active">
-  <div class="chatbox"><div id="conversation" class="conversation"><div class="bubble system">Memoria.ia pronta. Escreva uma mensagem para começar.</div></div>
-  <div class="composer"><textarea id="message" rows="3" placeholder="Digite sua mensagem..."></textarea><button id="sendMemoria">Enviar</button></div></div>
+  <div class="chatbox">
+    <div class="test-toolbar">
+      <button id="toggleAutoTest" type="button">▶ Teste autônomo</button>
+      <span id="autoTestStatus">Inativo</span>
+    </div>
+    <div id="autoTestPanel" class="test-panel" hidden>
+      <label>Ciclos<select id="autoTestCycles"><option value="5">5</option><option value="10" selected>10</option><option value="25">25</option><option value="50">50</option></select></label>
+      <label>Intervalo<select id="autoTestDelay"><option value="0">Sem espera</option><option value="500" selected>0,5 segundo</option><option value="1000">1 segundo</option><option value="3000">3 segundos</option></select></label>
+      <div class="test-actions"><button id="startAutoTest" type="button">Iniciar</button><button id="pauseAutoTest" type="button" disabled>Pausar</button><button id="stopAutoTest" type="button" disabled>Encerrar</button><button id="downloadAutoReport" type="button" disabled>Relatório</button></div>
+      <p>O GPT cria os cenários; a Memoria.ia registra e resolve as relações em uma memória de teste isolada.</p>
+    </div>
+    <div id="conversation" class="conversation"><div class="bubble system">Memoria.ia pronta. Escreva uma mensagem ou inicie um teste autônomo.</div></div>
+    <div class="composer"><textarea id="message" rows="3" placeholder="Digite sua mensagem..."></textarea><button id="sendMemoria">Enviar</button></div>
+  </div>
 </section>
 <section id="page-settings" class="page panel">
   <h2>Configurações</h2>
