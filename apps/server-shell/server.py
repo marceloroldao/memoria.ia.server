@@ -166,6 +166,8 @@ class ShellHandler(BaseHTTPRequestHandler):
             if key.lower() not in HOP_BY_HOP_HEADERS
             and key.lower() not in {"host", "content-length"}
         }
+        if base_url == self.config.memoria_api_url and self.config.memoria_api_key:
+            headers["X-Memoria-Key"] = self.config.memoria_api_key
         request = Request(url, data=body if body else None, headers=headers, method=self.command)
 
         try:
