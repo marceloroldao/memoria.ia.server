@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Memoria.ia</title><link rel="stylesheet" href="/admin/memoria/style.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Memoria.ia</title><link rel="stylesheet" href="/admin/memoria/style.css"><style>.error-notice{border-color:#e1a0a0;background:#fff0f0;color:#8b1e1e}</style></head>
 <body>
 <header><div><h1>Memoria.ia</h1><p>Memória local para IA</p></div><nav><button class="nav active" data-page="chat">Chat</button><button class="nav" data-page="settings">Configurações</button><button class="nav" data-page="diagnostics">Diagnóstico</button></nav></header>
 <main>
@@ -35,6 +35,7 @@
     <button id="saveModelProfile" type="button">Adicionar modelo</button>
   </div>
   <p id="restartNotice" class="notice" hidden>Modelo ativado. Na primeira migração para o catálogo, execute <code>docker compose restart memoria</code> uma vez.</p>
+  <p id="modelCatalogMessage" class="notice" hidden></p>
   <div id="modelsList" class="models-list"><p>Carregando catálogo…</p></div>
   <details><summary>Estado técnico atual da Memoria.ia</summary><pre id="llmConfigStatus" class="output">Carregando…</pre></details>
 </section>
