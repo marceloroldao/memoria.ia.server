@@ -25,3 +25,11 @@ async function refreshHealth() {
 
 refreshHealth();
 setInterval(refreshHealth, 15000);
+
+document.getElementById("logout").addEventListener("click", async () => {
+  try {
+    await fetch("/api/server/v1/logout", { method: "POST" });
+  } finally {
+    window.location.replace("/login");
+  }
+});
