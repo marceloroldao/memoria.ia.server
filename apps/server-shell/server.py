@@ -65,6 +65,7 @@ def static_target(path: str) -> Path | None:
         "/admin/memoria/": MEMORIA_STATIC / "index.html",
         "/admin/memoria/style.css": MEMORIA_STATIC / "style.css",
         "/admin/memoria/app.js": MEMORIA_STATIC / "app.js",
+        "/admin/memoria/history-fix.js": MEMORIA_STATIC / "history-fix.js",
         "/explorer/bdr": BDR_STATIC / "index.html",
         "/explorer/bdr/": BDR_STATIC / "index.html",
         "/explorer/bdr/styles.css": BDR_STATIC / "styles.css",
@@ -91,13 +92,7 @@ class ShellHandler(BaseHTTPRequestHandler):
         return morsel.value if morsel else None
 
     def _cookie_header(self, token: str, max_age: int) -> str:
-        parts = [
-            f"memoria_session={token}",
-            "Path=/",
-            "HttpOnly",
-            "SameSite=Strict",
-            f"Max-Age={max_age}",
-        ]
+        parts = [f"memoria_session={token}", "Path=/", "HttpOnly", "SameSite=Strict", f"Max-Age={max_age}"]
         if self.config.cookie_secure:
             parts.append("Secure")
         return "; ".join(parts)
@@ -109,12 +104,7 @@ class ShellHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    def _write_json(
-        self,
-        status: int,
-        payload: object,
-        extra_headers: dict[str, str] | None = None,
-    ) -> None:
+    def _write_json(self, status: int, payload: object, extra_headers: dict[str, str] | None = None) -> None:
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -162,23 +152,15 @@ class ShellHandler(BaseHTTPRequestHandler):
         url = base_url + upstream_path
         if parsed.query:
             url += "?" + parsed.query
-
         body = self._read_body()
         if body is None:
             return
-
-        headers = {
-            key: value
-            for key, value in self.headers.items()
-            if key.lower() not in HOP_BY_HOP_HEADERS
-            and key.lower() not in {"host", "content-length"}
-        }
+        headers = {key: value for key, value in self.headers.items() if key.lower() not in HOP_BY_HOP_HEADERS and key.lower() not in {"host", "content-length"}}
         if base_url == self.config.memoria_api_url and self.config.memoria_api_key:
             headers["X-Memoria-Key"] = self.config.memoria_api_key
         if base_url == self.config.model_gateway_url and self.config.model_gateway_key:
             headers["X-Model-Gateway-Key"] = self.config.model_gateway_key
         request = Request(url, data=body if body else None, headers=headers, method=self.command)
-
         try:
             with urlopen(request, timeout=self.config.proxy_timeout_seconds) as response:
                 payload = response.read()
@@ -193,8 +175,7 @@ class ShellHandler(BaseHTTPRequestHandler):
         except HTTPError as error:
             payload = error.read()
             self.send_response(error.code)
-            content_type = error.headers.get("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Type", error.headers.get("Content-Type", "application/json; charset=utf-8"))
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             if self.command != "HEAD":
@@ -216,33 +197,19 @@ class ShellHandler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
             self._write_json(400, {"error": "invalid_request"})
             return
-
         result = self.auth.login(username, password, self.client_address[0])
         if result.retry_after:
-            self._write_json(
-                429,
-                {"error": "too_many_attempts"},
-                {"Retry-After": str(result.retry_after)},
-            )
+            self._write_json(429, {"error": "too_many_attempts"}, {"Retry-After": str(result.retry_after)})
             return
         if not result.token:
             self._write_json(401, {"error": "invalid_credentials"})
             return
-
         max_age = self.config.session_hours * 60 * 60
-        self._write_json(
-            200,
-            {"status": "authenticated", "username": self.config.admin_username},
-            {"Set-Cookie": self._cookie_header(result.token, max_age)},
-        )
+        self._write_json(200, {"status": "authenticated", "username": self.config.admin_username}, {"Set-Cookie": self._cookie_header(result.token, max_age)})
 
     def _logout(self) -> None:
         self.auth.logout(self._session_token())
-        self._write_json(
-            200,
-            {"status": "logged_out"},
-            {"Set-Cookie": self._cookie_header("", 0)},
-        )
+        self._write_json(200, {"status": "logged_out"}, {"Set-Cookie": self._cookie_header("", 0)})
 
     def _component_health(self, base_url: str, path: str) -> dict[str, object]:
         try:
@@ -258,69 +225,39 @@ class ShellHandler(BaseHTTPRequestHandler):
         gateway = self._component_health(self.config.model_gateway_url, "/health")
         states = {memoria["status"], bdr["status"], gateway["status"]}
         overall = "online" if states == {"online"} else "degraded"
-        self._write_json(
-            200,
-            {
-                "schema": "memoria-server-health/v1",
-                "status": overall,
-                "shell": {"status": "online"},
-                "components": {"memoria": memoria, "bdr_explorer": bdr, "model_gateway": gateway},
-            },
-        )
+        self._write_json(200, {"schema": "memoria-server-health/v1", "status": overall, "shell": {"status": "online"}, "components": {"memoria": memoria, "bdr_explorer": bdr, "model_gateway": gateway}})
 
     def _dispatch(self) -> None:
         parsed = urlsplit(self.path)
         path = parsed.path
-
         if path == "/api/server/v1/health":
-            self._health()
-            return
+            self._health(); return
         if path == "/api/server/v1/login":
-            self._login()
-            return
-
+            self._login(); return
         authenticated = self.auth.verify(self._session_token())
         if path == "/login":
-            if authenticated:
-                self._redirect("/")
-            else:
-                self._serve_static(SHELL_STATIC / "login.html")
+            if authenticated: self._redirect("/")
+            else: self._serve_static(SHELL_STATIC / "login.html")
             return
         if path in {"/login.css", "/login.js"}:
-            self._serve_static(static_target(path))
-            return
-
+            self._serve_static(static_target(path)); return
         if not authenticated:
-            if path.startswith("/api/"):
-                self._write_json(401, {"error": "authentication_required"})
-            else:
-                self._redirect("/login")
+            if path.startswith("/api/"): self._write_json(401, {"error": "authentication_required"})
+            else: self._redirect("/login")
             return
-
-        if self.autotests.dispatch(self, path, parse_qs(parsed.query)):
-            return
-
+        if self.autotests.dispatch(self, path, parse_qs(parsed.query)): return
         if path == "/api/server/v1/session":
-            self._write_json(
-                200,
-                {"authenticated": True, "username": self.config.admin_username},
-            )
-            return
+            self._write_json(200, {"authenticated": True, "username": self.config.admin_username}); return
         if path == "/api/server/v1/logout":
-            if self.command != "POST":
-                self._write_json(405, {"error": "method_not_allowed"}, {"Allow": "POST"})
-            else:
-                self._logout()
+            if self.command != "POST": self._write_json(405, {"error": "method_not_allowed"}, {"Allow": "POST"})
+            else: self._logout()
             return
-
         target = proxy_target(self.config, path)
         if target:
-            self._proxy(target)
-            return
+            self._proxy(target); return
         asset = static_target(path)
         if asset:
-            self._serve_static(asset)
-            return
+            self._serve_static(asset); return
         self._write_json(404, {"error": "route_not_found"})
 
     do_GET = _dispatch
@@ -340,18 +277,11 @@ def main() -> None:
     parser.add_argument("--port", type=int)
     args = parser.parse_args()
     config = ShellConfig.from_env()
-    if args.host:
-        config = ShellConfig(**{**config.__dict__, "host": args.host})
-    if args.port:
-        config = ShellConfig(**{**config.__dict__, "port": args.port})
-    if not config.admin_password:
-        raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
+    if args.host: config = ShellConfig(**{**config.__dict__, "host": args.host})
+    if args.port: config = ShellConfig(**{**config.__dict__, "port": args.port})
+    if not config.admin_password: raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
     ShellHandler.config = config
-    ShellHandler.auth = AuthManager(
-        config.admin_username,
-        config.admin_password,
-        session_seconds=config.session_hours * 60 * 60,
-    )
+    ShellHandler.auth = AuthManager(config.admin_username, config.admin_password, session_seconds=config.session_hours * 60 * 60)
     ShellHandler.autotests = AutonomousTestManager(config)
     server = ThreadingHTTPServer((config.host, config.port), ShellHandler)
     print(f"Memoria.ia Server: http://{config.host}:{config.port}")
