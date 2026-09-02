@@ -1,6 +1,35 @@
 name: memoria-ia-server
 
 services:
+  model-gateway:
+    build:
+      context: .
+      dockerfile: docker/model-gateway/Dockerfile
+    environment:
+      MODEL_GATEWAY_HOST: 0.0.0.0
+      MODEL_GATEWAY_PORT: 8090
+      MODEL_GATEWAY_DATA_DIR: /data
+      MODEL_GATEWAY_ADMIN_KEY: ${MEMORIA_API_KEY}
+      MODEL_GATEWAY_RUNTIME_KEY: ${MEMORIA_API_KEY}
+      MODEL_GATEWAY_TIMEOUT: ${MODEL_GATEWAY_TIMEOUT:-120}
+      MEMORIA_API_URL: http://memoria:8080
+      MEMORIA_API_KEY: ${MEMORIA_API_KEY}
+    volumes:
+      - model-gateway-data:/data
+    expose:
+      - "8090"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
   memoria:
     build:
       context: .
@@ -17,7 +46,7 @@ services:
       MEMORIA_CONVERSATION_RUNTIME: native
       MEMORIA_EPISODIC_RUNTIME: native
       MEMORIA_NATIVE_LIB: /usr/local/lib/libmemoria_mobile.so
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_BASE_URL: http://model-gateway:8090/v1
       GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
       MEMORIA_LLM_INPUT_USD_PER_MILLION: ${MEMORIA_LLM_INPUT_USD_PER_MILLION:-}
       MEMORIA_LLM_OUTPUT_USD_PER_MILLION: ${MEMORIA_LLM_OUTPUT_USD_PER_MILLION:-}
@@ -33,6 +62,9 @@ services:
       MEMORIA_LICENSE_CAPABILITIES: ${MEMORIA_LICENSE_CAPABILITIES:-memory.read,memory.write,chat.use}
     volumes:
       - memoria-data:/data
+    depends_on:
+      model-gateway:
+        condition: service_healthy
     expose:
       - "8080"
     extra_hosts:
@@ -73,6 +105,32 @@ services:
     networks:
       - internal
 
+  llama:
+    profiles: ["local-llm"]
+    image: ${MEMORIA_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    command:
+      - "-m"
+      - "/models/${MEMORIA_LLAMA_MODEL_FILE:-model.gguf}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+      - "-c"
+      - "${MEMORIA_LLAMA_CONTEXT_SIZE:-4096}"
+      - "-t"
+      - "${MEMORIA_LLAMA_THREADS:-4}"
+      - "--alias"
+      - "${MEMORIA_LLAMA_MODEL_ALIAS:-local-llama}"
+    volumes:
+      - "${MEMORIA_LLAMA_MODELS_DIR:-./models}:/models:ro"
+    expose:
+      - "8080"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
   server:
     build:
       context: .
@@ -82,6 +140,8 @@ services:
       MEMORIA_SERVER_PORT: 8780
       MEMORIA_API_URL: http://memoria:8080
       BDR_EXPLORER_URL: http://bdr-explorer:8765
+      MODEL_GATEWAY_URL: http://model-gateway:8090
+      MODEL_GATEWAY_ADMIN_KEY: ${MEMORIA_API_KEY}
       MEMORIA_SERVER_PROXY_TIMEOUT: ${MEMORIA_SERVER_PROXY_TIMEOUT:-30}
       MEMORIA_SERVER_MAX_REQUEST_BYTES: ${MEMORIA_SERVER_MAX_REQUEST_BYTES:-10485760}
       MEMORIA_SERVER_ADMIN_USER: ${MEMORIA_SERVER_ADMIN_USER:-admin}
@@ -93,6 +153,8 @@ services:
       memoria:
         condition: service_healthy
       bdr-explorer:
+        condition: service_healthy
+      model-gateway:
         condition: service_healthy
     ports:
       - "${MEMORIA_SERVER_PORT:-8780}:8780"
@@ -113,6 +175,7 @@ services:
 
 volumes:
   memoria-data:
+  model-gateway-data:
 
 networks:
   internal:
