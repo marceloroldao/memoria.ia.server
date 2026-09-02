@@ -14,6 +14,10 @@ class ShellConfig:
     bdr_explorer_url: str = "http://127.0.0.1:8765"
     proxy_timeout_seconds: float = 10.0
     max_request_bytes: int = 10 * 1024 * 1024
+    admin_username: str = "admin"
+    admin_password: str = ""
+    session_hours: int = 8
+    cookie_secure: bool = False
 
     @classmethod
     def from_env(cls) -> "ShellConfig":
@@ -28,4 +32,9 @@ class ShellConfig:
             max_request_bytes=int(
                 os.getenv("MEMORIA_SERVER_MAX_REQUEST_BYTES", str(cls.max_request_bytes))
             ),
+            admin_username=os.getenv("MEMORIA_SERVER_ADMIN_USER", cls.admin_username),
+            admin_password=os.getenv("MEMORIA_SERVER_ADMIN_PASSWORD", cls.admin_password),
+            session_hours=int(os.getenv("MEMORIA_SERVER_SESSION_HOURS", str(cls.session_hours))),
+            cookie_secure=os.getenv("MEMORIA_SERVER_COOKIE_SECURE", "false").lower()
+            in {"1", "true", "yes", "on"},
         )
