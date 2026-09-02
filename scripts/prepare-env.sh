@@ -22,7 +22,19 @@ if ! grep -q '^MEMORIA_SERVER_ADMIN_USER=' .env; then
   printf '\nMEMORIA_SERVER_ADMIN_USER=admin\n' >> .env
 fi
 
-if ! grep -q '^MEMORIA_SERVER_ADMIN_PASSWORD=' .env; then
+if grep -q '^MEMORIA_SERVER_ADMIN_PASSWORD=change-me-with-a-random-login-password
+if ! grep -q '^MEMORIA_SERVER_SESSION_HOURS=' .env; then
+  printf 'MEMORIA_SERVER_SESSION_HOURS=8\n' >> .env
+fi
+
+if ! grep -q '^MEMORIA_SERVER_COOKIE_SECURE=' .env; then
+  printf 'MEMORIA_SERVER_COOKIE_SECURE=false\n' >> .env
+fi
+ .env; then
+  generated_password="$(random_secret)"
+  sed -i "s/^MEMORIA_SERVER_ADMIN_PASSWORD=.*/MEMORIA_SERVER_ADMIN_PASSWORD=${generated_password}/" .env
+  echo "Generated a new server login password in .env."
+elif ! grep -q '^MEMORIA_SERVER_ADMIN_PASSWORD=' .env; then
   generated_password="$(random_secret)"
   printf 'MEMORIA_SERVER_ADMIN_PASSWORD=%s\n' "${generated_password}" >> .env
   echo "Generated a new server login password in .env."
