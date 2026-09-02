@@ -1,0 +1,118 @@
+name: memoria-ia-server
+
+services:
+  memoria:
+    build:
+      context: .
+      dockerfile: docker/memoria/Dockerfile
+      args:
+        MEMORIA_COMMIT: ${MEMORIA_COMMIT:-162604240f22cfab6449ebe48f4eb764d6e76d0c}
+        BDR_COMMIT: ${BDR_COMMIT:-1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e}
+    environment:
+      MEMORIA_ORGANIZATION_ID: ${MEMORIA_ORGANIZATION_ID}
+      MEMORIA_ORGANIZATION_NAME: ${MEMORIA_ORGANIZATION_NAME}
+      MEMORIA_NODE_ID: ${MEMORIA_NODE_ID}
+      MEMORIA_API_KEY: ${MEMORIA_API_KEY}
+      MEMORIA_DATA_DIR: /data
+      MEMORIA_CONVERSATION_RUNTIME: native
+      MEMORIA_EPISODIC_RUNTIME: native
+      MEMORIA_NATIVE_LIB: /usr/local/lib/libmemoria_mobile.so
+      MEMORIA_LLM_PROVIDER: ${MEMORIA_LLM_PROVIDER:-mock}
+      MEMORIA_LLM_MODEL: ${MEMORIA_LLM_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
+      MEMORIA_LLM_INPUT_USD_PER_MILLION: ${MEMORIA_LLM_INPUT_USD_PER_MILLION:-}
+      MEMORIA_LLM_OUTPUT_USD_PER_MILLION: ${MEMORIA_LLM_OUTPUT_USD_PER_MILLION:-}
+      MEMORIA_PUBLIC_KEY: ${MEMORIA_PUBLIC_KEY:-}
+      MEMORIA_CERTIFICATE_REF: ${MEMORIA_CERTIFICATE_REF:-}
+      MEMORIA_CERTIFICATE_STATUS: ${MEMORIA_CERTIFICATE_STATUS:-not_configured}
+      MEMORIA_CAPABILITIES: ${MEMORIA_CAPABILITIES:-memory.read,memory.write}
+      MEMORIA_LICENSE_STATUS: ${MEMORIA_LICENSE_STATUS:-not_configured}
+      MEMORIA_LICENSE_ID: ${MEMORIA_LICENSE_ID:-}
+      MEMORIA_LICENSE_PLAN: ${MEMORIA_LICENSE_PLAN:-early_access}
+      MEMORIA_LICENSE_VALID_UNTIL: ${MEMORIA_LICENSE_VALID_UNTIL:-}
+      MEMORIA_LICENSE_MAX_NODES: ${MEMORIA_LICENSE_MAX_NODES:-1}
+      MEMORIA_LICENSE_CAPABILITIES: ${MEMORIA_LICENSE_CAPABILITIES:-memory.read,memory.write,chat.use}
+    volumes:
+      - memoria-data:/data
+    expose:
+      - "8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+  bdr-explorer:
+    build:
+      context: .
+      dockerfile: docker/bdr-explorer/Dockerfile
+      args:
+        BDR_COMMIT: ${BDR_COMMIT:-1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e}
+    command: ["python", "-m", "explorer.server", "--host", "0.0.0.0", "--port", "8765", "--demo"]
+    expose:
+      - "8765"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/server-shell/Dockerfile
+    environment:
+      MEMORIA_SERVER_HOST: 0.0.0.0
+      MEMORIA_SERVER_PORT: 8780
+      MEMORIA_API_URL: http://memoria:8080
+      BDR_EXPLORER_URL: http://bdr-explorer:8765
+      MEMORIA_SERVER_PROXY_TIMEOUT: ${MEMORIA_SERVER_PROXY_TIMEOUT:-30}
+      MEMORIA_SERVER_MAX_REQUEST_BYTES: ${MEMORIA_SERVER_MAX_REQUEST_BYTES:-10485760}
+    depends_on:
+      memoria:
+        condition: service_healthy
+      bdr-explorer:
+        condition: service_healthy
+    ports:
+      - "${MEMORIA_SERVER_PORT:-8780}:8780"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8780/api/server/v1/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - internal
+
+volumes:
+  memoria-data:
+
+networks:
+  internal:
+    driver: bridge
