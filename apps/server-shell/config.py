@@ -18,6 +18,7 @@ class ShellConfig:
     admin_password: str = ""
     session_hours: int = 8
     cookie_secure: bool = False
+    memoria_api_key: str = ""
 
     @classmethod
     def from_env(cls) -> "ShellConfig":
@@ -37,4 +38,5 @@ class ShellConfig:
             session_hours=int(os.getenv("MEMORIA_SERVER_SESSION_HOURS", str(cls.session_hours))),
             cookie_secure=os.getenv("MEMORIA_SERVER_COOKIE_SECURE", "false").lower()
             in {"1", "true", "yes", "on"},
+            memoria_api_key=os.getenv("MEMORIA_API_KEY", cls.memoria_api_key),
         )
