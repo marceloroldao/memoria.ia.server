@@ -30,7 +30,12 @@ body {
   justify-content: space-between;
   background: rgba(5,9,20,.82);
 }
-.brand, .health { display: flex; align-items: center; gap: 12px; }
+.brand, .health, .top-actions { display: flex; align-items: center; gap: 12px; }
+.logout {
+  min-height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9px;
+  color: var(--text); background: rgba(16,27,48,.9); font: inherit; font-size: .875rem; cursor: pointer;
+}
+.logout:hover, .logout:focus-visible { border-color: var(--cyan); outline: none; }
 .brand div { display: grid; }
 .brand span, .health { color: var(--muted); font-size: .875rem; }
 .brand-mark {
