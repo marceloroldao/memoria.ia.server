@@ -15,6 +15,7 @@ class ShellConfig:
     model_gateway_url: str = "http://127.0.0.1:8090"
     model_gateway_key: str = ""
     proxy_timeout_seconds: float = 10.0
+    autotest_timeout_seconds: float = 180.0
     max_request_bytes: int = 10 * 1024 * 1024
     admin_username: str = "admin"
     admin_password: str = ""
@@ -33,6 +34,9 @@ class ShellConfig:
             model_gateway_key=os.getenv("MODEL_GATEWAY_ADMIN_KEY", cls.model_gateway_key),
             proxy_timeout_seconds=float(
                 os.getenv("MEMORIA_SERVER_PROXY_TIMEOUT", str(cls.proxy_timeout_seconds))
+            ),
+            autotest_timeout_seconds=float(
+                os.getenv("MEMORIA_AUTOTEST_TIMEOUT", str(cls.autotest_timeout_seconds))
             ),
             max_request_bytes=int(
                 os.getenv("MEMORIA_SERVER_MAX_REQUEST_BYTES", str(cls.max_request_bytes))

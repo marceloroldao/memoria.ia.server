@@ -77,8 +77,14 @@ class MemoriaClient:
             except Exception:
                 detail = None
             raise UpstreamError(str(detail or f"Memoria.ia retornou HTTP {error.code}")) from error
-        except (URLError, TimeoutError, json.JSONDecodeError) as error:
+        except TimeoutError as error:
+            raise UpstreamError(
+                f"Tempo limite da Memoria.ia excedido durante o teste ({self.timeout:.0f}s)"
+            ) from error
+        except URLError as error:
             raise UpstreamError("Memoria.ia indisponível durante o teste") from error
+        except json.JSONDecodeError as error:
+            raise UpstreamError("Memoria.ia retornou uma resposta inválida durante o teste") from error
 
 
 @dataclass
@@ -111,7 +117,7 @@ class AutonomousTestManager:
         self.client = MemoriaClient(
             config.memoria_api_url,
             config.memoria_api_key,
-            max(config.proxy_timeout_seconds, 30.0),
+            max(config.autotest_timeout_seconds, config.proxy_timeout_seconds),
         )
         self._runs: dict[str, TestRun] = {}
         self._lock = Lock()
