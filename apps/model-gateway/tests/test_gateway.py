@@ -1,10 +1,33 @@
 from pathlib import Path
 import sys
+from unittest.mock import patch
 
 GATEWAY_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(GATEWAY_DIR))
 
-from gateway import ModelStore, gemini_to_openai, llama_to_openai
+from gateway import ModelStore, gemini_to_openai, llama_to_openai, request_json
+
+
+class JsonResponse:
+    status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self):
+        return b'{"ok":true}'
+
+
+def test_json_request_supports_put_for_memoria_configuration():
+    with patch("gateway.urlopen", return_value=JsonResponse()) as mocked:
+        status, body = request_json("http://memoria/config", {"x": 1}, {}, 1, method="PUT")
+    request = mocked.call_args.args[0]
+    assert request.get_method() == "PUT"
+    assert status == 200
+    assert body == {"ok": True}
 
 
 def test_store_keeps_multiple_provider_credentials_separate(tmp_path):
