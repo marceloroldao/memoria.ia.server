@@ -12,6 +12,8 @@ class ShellConfig:
     port: int = 8780
     memoria_api_url: str = "http://127.0.0.1:8000"
     bdr_explorer_url: str = "http://127.0.0.1:8765"
+    model_gateway_url: str = "http://127.0.0.1:8090"
+    model_gateway_key: str = ""
     proxy_timeout_seconds: float = 10.0
     max_request_bytes: int = 10 * 1024 * 1024
     admin_username: str = "admin"
@@ -27,6 +29,8 @@ class ShellConfig:
             port=int(os.getenv("MEMORIA_SERVER_PORT", str(cls.port))),
             memoria_api_url=os.getenv("MEMORIA_API_URL", cls.memoria_api_url).rstrip("/"),
             bdr_explorer_url=os.getenv("BDR_EXPLORER_URL", cls.bdr_explorer_url).rstrip("/"),
+            model_gateway_url=os.getenv("MODEL_GATEWAY_URL", cls.model_gateway_url).rstrip("/"),
+            model_gateway_key=os.getenv("MODEL_GATEWAY_ADMIN_KEY", cls.model_gateway_key),
             proxy_timeout_seconds=float(
                 os.getenv("MEMORIA_SERVER_PROXY_TIMEOUT", str(cls.proxy_timeout_seconds))
             ),
