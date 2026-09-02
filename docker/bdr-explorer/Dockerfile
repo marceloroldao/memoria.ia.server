@@ -1,5 +1,6 @@
-FROM alpine/git:2.47.2 AS source
+FROM alpine:3.20 AS source
 
+RUN apk add --no-cache git ca-certificates
 ARG BDR_COMMIT=1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e
 RUN git init /source && \
     git -C /source remote add origin https://github.com/marceloroldao/resolutive-DB.git && \
