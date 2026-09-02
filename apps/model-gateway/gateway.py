@@ -113,7 +113,12 @@ class ModelStore:
         model = str(payload.get("model", "")).strip()
         if not name or not model:
             raise GatewayError(422, "name and model are required")
-        base_url = str(payload.get("base_url") or DEFAULT_BASE_URLS[provider]).strip().rstrip("/")
+        supplied_base_url = str(payload.get("base_url") or "").strip()
+        if supplied_base_url.casefold() in {"", "default", "padrao", "padrão", "automatico", "automático"}:
+            supplied_base_url = DEFAULT_BASE_URLS[provider]
+        if provider == "llama" and supplied_base_url.startswith("llama:"):
+            supplied_base_url = "http://" + supplied_base_url
+        base_url = supplied_base_url.rstrip("/")
         if not base_url.startswith(("http://", "https://")):
             raise GatewayError(422, "base_url must use http or https")
 
