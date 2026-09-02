@@ -1,0 +1,39 @@
+name: Deployment validation
+
+on:
+  push:
+    paths:
+      - "compose.yaml"
+      - "docker/**"
+      - "scripts/**"
+      - ".env.example"
+      - ".github/workflows/deployment-validation.yml"
+  pull_request:
+    paths:
+      - "compose.yaml"
+      - "docker/**"
+      - "scripts/**"
+      - ".env.example"
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare non-secret validation environment
+        run: |
+          cp .env.example .env
+          sed -i 's/change-me-with-a-long-random-secret/ci-validation-only/' .env
+      - name: Validate Compose model
+        run: docker compose config --quiet
+      - name: Validate shell scripts
+        run: |
+          sh -n scripts/install.sh
+          sh -n scripts/status.sh
+          sh -n scripts/update.sh
+          sh -n scripts/uninstall.sh
+      - name: Build deployment images
+        run: docker compose build
