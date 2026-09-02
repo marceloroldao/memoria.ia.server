@@ -99,9 +99,9 @@ MEMORIA_NODE_ID=memoria:vuppi:primary
 
 Se alterar a organização depois de já existirem dados, a Memoria.ia pode recusar a inicialização para evitar misturar identidades. Faça essa configuração antes de uso real.
 
-## Configuração do modelo
+## Catálogo de modelos
 
-Abra `/admin/memoria`, entre em **Configurações** e informe:
+Abra `/admin/memoria`, entre em **Configurações** e cadastre quantos perfis precisar:
 
 - provedor;
 - identificador do modelo;
@@ -109,20 +109,31 @@ Abra `/admin/memoria`, entre em **Configurações** e informe:
 
 A credencial fica no volume persistente, em arquivo local com permissão restrita, e não é devolvida pela API.
 
-Depois de salvar, reinicie somente a Memoria.ia:
+Ative o perfil desejado. Apenas na primeira migração para o gateway reinicie a Memoria.ia:
 
 ```bash
 docker compose restart memoria
 ```
 
-Para OpenAI, `gpt-5.6-luna` é um identificador válido. Para um runtime local compatível com OpenAI, altere `OPENAI_BASE_URL` no `.env` e recrie o serviço.
+Depois disso, OpenAI, Gemini e Llama local podem ser alternados sem apagar configurações e sem novos reinícios.
+
+### Llama local
+
+Coloque um arquivo GGUF no diretório `./models`, ajuste `MEMORIA_LLAMA_MODEL_FILE` no `.env` e execute:
+
+```bash
+docker compose --profile local-llm up -d llama
+```
+
+Na interface, cadastre o provedor **Llama local**, modelo `local-llama` e deixe a URL vazia para usar `http://llama:8080/v1`.
 
 ## Dados persistentes
 
-Somente o serviço Memoria.ia grava no volume:
+Memoria.ia e o catálogo gravam em volumes separados:
 
 ```text
 memoria-ia-server_memoria-data
+memoria-ia-server_model-gateway-data
 ```
 
 BDR Explorer está em modo demonstrativo nesta primeira instalação. A conexão read-only com um BDR persistente será implementada por contrato público.
@@ -135,8 +146,6 @@ Ainda não estão implementados:
 - QR Code de ativação;
 - portabilidade completa entre provedores;
 - Central de Licenciamento;
-- seleção simultânea entre vários modelos;
-- execução local gerenciada de GGUF;
 - HTTPS automático;
 - cluster e alta disponibilidade.
 
