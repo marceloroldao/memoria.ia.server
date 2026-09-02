@@ -39,6 +39,16 @@ def test_gateway_migration_marker_is_persistent(tmp_path):
     assert ModelStore(tmp_path).gateway_configured()
 
 
+def test_llama_uses_default_url_when_field_is_empty_or_friendly_default(tmp_path):
+    store = ModelStore(tmp_path)
+    empty = store.save({"name": "Local A", "provider": "llama", "model": "local-a", "base_url": ""})
+    friendly = store.save({"name": "Local B", "provider": "llama", "model": "local-b", "base_url": "padrão"})
+    shorthand = store.save({"name": "Local C", "provider": "llama", "model": "local-c", "base_url": "llama:8080/v1"})
+    assert empty["base_url"] == "http://llama:8080/v1"
+    assert friendly["base_url"] == "http://llama:8080/v1"
+    assert shorthand["base_url"] == "http://llama:8080/v1"
+
+
 def test_gemini_conversion_uses_openai_responses_shape():
     converted = gemini_to_openai(
         {"candidates": [{"content": {"parts": [{"text": "resposta"}]}}], "usageMetadata": {"promptTokenCount": 3, "candidatesTokenCount": 2}},
