@@ -30,7 +30,7 @@
     <label>Nome do perfil<input id="modelProfileName" placeholder="Ex.: GPT principal"></label>
     <label>Provedor<select id="modelProvider"><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="llama">Llama local</option></select></label>
     <label>Modelo<input id="modelName" placeholder="Ex.: gpt-5.6-luna"></label>
-    <label>URL compatível<input id="modelBaseUrl" placeholder="Opcional; o padrão do provedor será usado"></label>
+    <label id="modelBaseUrlLabel">URL compatível<input id="modelBaseUrl" placeholder="Opcional; o padrão do provedor será usado"></label>
     <label id="modelApiKeyLabel">Chave do provedor<input id="modelApiKey" type="password" autocomplete="new-password" placeholder="A chave não será exibida novamente"></label>
     <button id="saveModelProfile" type="button">Adicionar modelo</button>
   </div>
