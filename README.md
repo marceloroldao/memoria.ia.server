@@ -56,7 +56,7 @@ bash scripts/install.sh
 
 Depois, abra `http://IP_DO_SERVIDOR:8780`.
 
-Consulte o [guia completo de instalação](docs/INSTALLATION.md) e as [notas da versão](RELEASE_NOTES_v0.1.0-alpha.3.md). Use HTTPS antes de expor o painel publicamente.
+Consulte o [guia completo de instalação](docs/INSTALLATION.md) e as [notas da versão](RELEASE_NOTES_v0.1.0-alpha.6.md). Use HTTPS antes de expor o painel publicamente.
 
 ## Planejamento
 
@@ -72,4 +72,3 @@ Consulte o [guia completo de instalação](docs/INSTALLATION.md) e as [notas da 
 ## Teste autônomo de relações
 
 A tela de chat inclui um agente de teste que usa o provedor GPT configurado, conversa com a Memoria.ia em um namespace isolado, avalia as relações por gabarito e gera relatório Markdown. Consulte [Agente de teste autônomo](docs/AUTONOMOUS-TEST-AGENT.md).
-
