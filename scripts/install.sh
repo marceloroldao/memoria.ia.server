@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
+bash scripts/prepare-env.sh
+
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required. Install Docker Engine and the Compose plugin first." >&2
   exit 1
