@@ -37,6 +37,11 @@ HOP_BY_HOP_HEADERS = {
 
 def proxy_target(config: ShellConfig, path: str) -> tuple[str, str] | None:
     """Return (base URL, upstream path) for an allowed API namespace."""
+    model_prefix = "/api/server/v1/models"
+    if path == model_prefix:
+        return config.model_gateway_url, "/admin/models"
+    if path.startswith(model_prefix + "/"):
+        return config.model_gateway_url, "/admin/models/" + path[len(model_prefix) + 1 :]
     if path == "/api/v1" or path.startswith("/api/v1/"):
         return config.memoria_api_url, path
     prefix = "/api/bdr-explorer/v1"
@@ -170,6 +175,8 @@ class ShellHandler(BaseHTTPRequestHandler):
         }
         if base_url == self.config.memoria_api_url and self.config.memoria_api_key:
             headers["X-Memoria-Key"] = self.config.memoria_api_key
+        if base_url == self.config.model_gateway_url and self.config.model_gateway_key:
+            headers["X-Model-Gateway-Key"] = self.config.model_gateway_key
         request = Request(url, data=body if body else None, headers=headers, method=self.command)
 
         try:
@@ -248,7 +255,8 @@ class ShellHandler(BaseHTTPRequestHandler):
     def _health(self) -> None:
         memoria = self._component_health(self.config.memoria_api_url, "/api/v1/health")
         bdr = self._component_health(self.config.bdr_explorer_url, "/api/health")
-        states = {memoria["status"], bdr["status"]}
+        gateway = self._component_health(self.config.model_gateway_url, "/health")
+        states = {memoria["status"], bdr["status"], gateway["status"]}
         overall = "online" if states == {"online"} else "degraded"
         self._write_json(
             200,
@@ -256,7 +264,7 @@ class ShellHandler(BaseHTTPRequestHandler):
                 "schema": "memoria-server-health/v1",
                 "status": overall,
                 "shell": {"status": "online"},
-                "components": {"memoria": memoria, "bdr_explorer": bdr},
+                "components": {"memoria": memoria, "bdr_explorer": bdr, "model_gateway": gateway},
             },
         )
 
@@ -358,4 +366,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
