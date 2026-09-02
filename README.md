@@ -44,6 +44,20 @@ Os arquivos importados mantêm sua origem documentada em `docs/architecture/MIGR
 
 Base de integração inicial. O objetivo imediato é preservar o que já funciona, unificar a navegação e estabelecer contratos que permitam evolução independente.
 
+## Instalação alpha
+
+A versão inicial instalável é `v0.1.0-alpha.1`.
+
+```bash
+git clone https://github.com/marceloroldao/memoria.ia.server.git
+cd memoria.ia.server
+bash scripts/install.sh
+```
+
+Depois, abra `http://IP_DO_SERVIDOR:8780`.
+
+Consulte o [guia completo de instalação](docs/INSTALLATION.md) e as [notas da versão](RELEASE_NOTES_v0.1.0-alpha.1.md). Use HTTPS antes de expor o painel publicamente.
+
 ## Planejamento
 
 - [Roadmap de evolução](docs/ROADMAP.md)
