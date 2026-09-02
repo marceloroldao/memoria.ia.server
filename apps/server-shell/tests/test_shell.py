@@ -28,6 +28,18 @@ def test_unknown_api_is_not_an_open_proxy():
     assert proxy_target(ShellConfig(), "/api/unknown") is None
 
 
+def test_model_catalog_namespace_is_sent_to_gateway():
+    config = ShellConfig(model_gateway_url="http://gateway")
+    assert proxy_target(config, "/api/server/v1/models") == (
+        "http://gateway",
+        "/admin/models",
+    )
+    assert proxy_target(config, "/api/server/v1/models/local/activate") == (
+        "http://gateway",
+        "/admin/models/local/activate",
+    )
+
+
 def test_module_static_routes_are_explicit():
     assert static_target("/admin/memoria").name == "index.html"
     assert static_target("/explorer/bdr/app.js").name == "app.js"
