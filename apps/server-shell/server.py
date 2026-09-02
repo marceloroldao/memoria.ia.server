@@ -10,10 +10,11 @@ import mimetypes
 from pathlib import Path
 import socket
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
 from auth import AuthManager
+from autonomous_tests import AutonomousTestManager
 from config import ShellConfig
 
 
@@ -70,6 +71,7 @@ def static_target(path: str) -> Path | None:
 class ShellHandler(BaseHTTPRequestHandler):
     config = ShellConfig()
     auth: AuthManager
+    autotests: AutonomousTestManager
 
     def _session_token(self) -> str | None:
         raw_cookie = self.headers.get("Cookie")
@@ -259,7 +261,8 @@ class ShellHandler(BaseHTTPRequestHandler):
         )
 
     def _dispatch(self) -> None:
-        path = urlsplit(self.path).path
+        parsed = urlsplit(self.path)
+        path = parsed.path
 
         if path == "/api/server/v1/health":
             self._health()
@@ -284,6 +287,9 @@ class ShellHandler(BaseHTTPRequestHandler):
                 self._write_json(401, {"error": "authentication_required"})
             else:
                 self._redirect("/login")
+            return
+
+        if self.autotests.dispatch(self, path, parse_qs(parsed.query)):
             return
 
         if path == "/api/server/v1/session":
@@ -338,6 +344,7 @@ def main() -> None:
         config.admin_password,
         session_seconds=config.session_hours * 60 * 60,
     )
+    ShellHandler.autotests = AutonomousTestManager(config)
     server = ThreadingHTTPServer((config.host, config.port), ShellHandler)
     print(f"Memoria.ia Server: http://{config.host}:{config.port}")
     print("Modules: Memoria Admin + BDR Explorer")
@@ -351,3 +358,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
