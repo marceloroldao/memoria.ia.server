@@ -1,6 +1,6 @@
 {
   "schema": "memoria-ia-server-release/v1",
-  "version": "0.1.0-alpha.2",
+  "version": "0.1.0-alpha.3",
   "channel": "private-alpha",
   "components": {
     "memoria.ia": {
@@ -12,7 +12,13 @@
       "commit": "1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e"
     },
     "server-shell": {
-      "version": "0.1.0-alpha.2"
+      "version": "0.1.0-alpha.3",
+      "features": [
+        "login",
+        "session-cookie",
+        "logout",
+        "login-rate-limit"
+      ]
     },
     "bdr-explorer": {
       "version": "0.1.0",
