@@ -99,51 +99,23 @@ MEMORIA_NODE_ID=memoria:vuppi:primary
 
 Se alterar a organização depois de já existirem dados, a Memoria.ia pode recusar a inicialização para evitar misturar identidades. Faça essa configuração antes de uso real.
 
-## Modos de modelo
+## Configuração do modelo
 
-### Memória/mock
+Abra `/admin/memoria`, entre em **Configurações** e informe:
 
-Padrão seguro para a primeira instalação:
+- provedor;
+- identificador do modelo;
+- credencial do provedor.
 
-```dotenv
-MEMORIA_LLM_PROVIDER=mock
-```
+A credencial fica no volume persistente, em arquivo local com permissão restrita, e não é devolvida pela API.
 
-### OpenAI
-
-```dotenv
-MEMORIA_LLM_PROVIDER=openai
-MEMORIA_LLM_MODEL=MODELO_ESCOLHIDO
-OPENAI_API_KEY=SUA_CHAVE
-OPENAI_BASE_URL=https://api.openai.com/v1
-```
-
-### Gemini
-
-```dotenv
-MEMORIA_LLM_PROVIDER=gemini
-MEMORIA_LLM_MODEL=MODELO_ESCOLHIDO
-GEMINI_API_KEY=SUA_CHAVE
-```
-
-### LLM local no servidor
-
-Inicie separadamente um servidor de inferência compatível com a API OpenAI, como um runtime baseado em llama.cpp. Depois configure:
-
-```dotenv
-MEMORIA_LLM_PROVIDER=openai
-MEMORIA_LLM_MODEL=NOME_DO_MODELO_LOCAL
-OPENAI_API_KEY=local
-OPENAI_BASE_URL=http://host.docker.internal:PORTA/v1
-```
-
-A versão alpha ativa um destino por configuração. A seleção simultânea e contextual entre vários modelos continuará na etapa do `resolutive-routing`.
-
-Após alterar `.env`:
+Depois de salvar, reinicie somente a Memoria.ia:
 
 ```bash
-docker compose up -d --force-recreate
+docker compose restart memoria
 ```
+
+Para OpenAI, `gpt-5.6-luna` é um identificador válido. Para um runtime local compatível com OpenAI, altere `OPENAI_BASE_URL` no `.env` e recrie o serviço.
 
 ## Dados persistentes
 
