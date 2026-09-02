@@ -1,6 +1,6 @@
 {
   "schema": "memoria-ia-server-release/v1",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "channel": "private-alpha",
   "components": {
     "memoria.ia": {
@@ -12,11 +12,19 @@
       "commit": "1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e"
     },
     "server-shell": {
-      "version": "0.1.0-alpha.1"
+      "version": "0.1.0-alpha.2"
     },
     "bdr-explorer": {
       "version": "0.1.0",
       "mode": "demo-read-only"
+    },
+    "@memoria-ia/admin": {
+      "version": "0.2.0",
+      "source": {
+        "repository": "marceloroldao/memoria.ia",
+        "branch": "product/windows-native-alpha",
+        "commit": "2871dc4a90b9aaa393f1525245424e14e02aaca2"
+      }
     }
   },
   "deployment": {
