@@ -46,7 +46,7 @@ Base de integração inicial. O objetivo imediato é preservar o que já funcion
 
 ## Instalação alpha
 
-A versão inicial instalável é `v0.1.0-alpha.3`.
+A versão instalável atual é `v0.1.0-alpha.6`.
 
 ```bash
 git clone https://github.com/marceloroldao/memoria.ia.server.git
@@ -68,3 +68,8 @@ Consulte o [guia completo de instalação](docs/INSTALLATION.md) e as [notas da 
 - [Decisão arquitetural do serviço OFF.IA](docs/architecture/ADR-003-OFFIA-PROVIDER-SERVICE.md)
 - [Memória pessoal e portabilidade entre provedores](docs/architecture/ADR-004-PERSONAL-MEMORY-PORTABILITY.md)
 - [Execução híbrida e seleção contextual de modelos](docs/architecture/ADR-005-HYBRID-MODEL-ROUTING.md)
+
+## Teste autônomo de relações
+
+A tela de chat inclui um agente de teste que usa o provedor GPT configurado, conversa com a Memoria.ia em um namespace isolado, avalia as relações por gabarito e gera relatório Markdown. Consulte [Agente de teste autônomo](docs/AUTONOMOUS-TEST-AGENT.md).
+
