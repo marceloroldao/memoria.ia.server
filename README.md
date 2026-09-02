@@ -46,7 +46,7 @@ Base de integração inicial. O objetivo imediato é preservar o que já funcion
 
 ## Instalação alpha
 
-A versão instalável atual é `v0.1.0-alpha.7`.
+A versão instalável atual é `v0.1.0-alpha.8`.
 
 ```bash
 git clone https://github.com/marceloroldao/memoria.ia.server.git
@@ -56,7 +56,7 @@ bash scripts/install.sh
 
 Depois, abra `http://IP_DO_SERVIDOR:8780`.
 
-Consulte o [guia completo de instalação](docs/INSTALLATION.md) e as [notas da versão](RELEASE_NOTES_v0.1.0-alpha.7.md). Use HTTPS antes de expor o painel publicamente.
+Consulte o [guia completo de instalação](docs/INSTALLATION.md) e as [notas da versão](RELEASE_NOTES_v0.1.0-alpha.8.md). Use HTTPS antes de expor o painel publicamente.
 
 ## Planejamento
 
