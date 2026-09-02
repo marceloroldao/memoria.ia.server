@@ -1,4 +1,4 @@
-# Instalação inicial — v0.1.0-alpha.1
+# Instalação inicial — v0.1.0-alpha.3
 
 Esta versão instala o Memoria.ia Server em Linux usando Docker Compose.
 
@@ -48,6 +48,23 @@ http://IP_DO_SERVIDOR:8780
 ```
 
 Antes de expor a instalação publicamente, use um proxy reverso com HTTPS e restrinja a porta 8780 conforme sua rede.
+
+## Login administrativo
+
+A atualização gera credenciais no arquivo local `.env`. Para consultá-las no próprio servidor:
+
+```bash
+grep '^MEMORIA_SERVER_ADMIN_USER=' .env
+grep '^MEMORIA_SERVER_ADMIN_PASSWORD=' .env
+```
+
+Não envie essa senha em mensagens nem a inclua em capturas de tela.
+
+A sessão dura oito horas por padrão. Quando HTTPS estiver configurado, altere:
+
+```dotenv
+MEMORIA_SERVER_COOKIE_SECURE=true
+```
 
 ## Estado
 
