@@ -87,12 +87,26 @@ services:
       dockerfile: docker/bdr-explorer/Dockerfile
       args:
         BDR_COMMIT: ${BDR_COMMIT:-1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e}
-    command: ["python", "-m", "explorer.server", "--host", "0.0.0.0", "--port", "8765", "--demo"]
+    command:
+      - "python"
+      - "-m"
+      - "explorer.server"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8765"
+      - "--memoria-url"
+      - "http://memoria:8080"
+      - "--memoria-api-key"
+      - "${MEMORIA_API_KEY}"
+    depends_on:
+      memoria:
+        condition: service_healthy
     expose:
       - "8765"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3).read()"]
+      test: ["CMD", "python", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3)); assert d.get('status') == 'ok' and d.get('mode') == 'memoria.ia-live'"]
       interval: 30s
       timeout: 5s
       start_period: 10s
