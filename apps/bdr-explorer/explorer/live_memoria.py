@@ -8,10 +8,11 @@ from urllib.request import Request, urlopen
 from bdr import BancoDeDadosResolutivo
 
 from .adapter import ExplorerSnapshotProvider
+from .observation import PublicBDRObservationProvider
 
 
 class LiveMemoriaSnapshotProvider:
-    """Build Explorer snapshots from Memoria.ia's authoritative persisted episodes.
+    """Build Explorer views from Memoria.ia's authoritative persisted episodes.
 
     This deliberately does not open Memoria.ia's native files directly while the
     runtime is writing them. Instead it consumes the read-only history contract
@@ -52,7 +53,7 @@ class LiveMemoriaSnapshotProvider:
         session_id = str(episode.get("session_id") or "")
         return f"[{role}] {text}\n.session={session_id}"
 
-    def snapshot(self) -> dict[str, object]:
+    def database(self) -> BancoDeDadosResolutivo:
         database = BancoDeDadosResolutivo(bucket_count=1 << 12)
         rows = [
             (self._node_key(episode, index), self._node_payload(episode))
@@ -60,7 +61,14 @@ class LiveMemoriaSnapshotProvider:
         ]
         if rows:
             database.inserir_lote(rows)
+        return database
+
+    def snapshot(self) -> dict[str, object]:
+        database = self.database()
         snapshot = ExplorerSnapshotProvider(database).snapshot()
         snapshot["source"] = "memoria.ia-live"
-        snapshot["persisted_episodes"] = len(rows)
+        snapshot["persisted_episodes"] = int(snapshot.get("statistics", {}).get("total_entidades", 0)) if isinstance(snapshot.get("statistics"), dict) else 0
         return snapshot
+
+    def observation(self) -> dict[str, object]:
+        return PublicBDRObservationProvider(self.database()).observe().as_dict()
