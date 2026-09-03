@@ -12,6 +12,7 @@ from bdr import BancoDeDadosResolutivo
 
 from .adapter import ExplorerSnapshotProvider
 from .events import EventBuffer
+from .live_memoria import LiveMemoriaSnapshotProvider
 from .observation import PublicBDRObservationProvider
 
 
@@ -35,9 +36,10 @@ def build_demo_database() -> BancoDeDadosResolutivo:
 
 
 class ExplorerHandler(SimpleHTTPRequestHandler):
-    provider: ExplorerSnapshotProvider
-    observation_provider: PublicBDRObservationProvider
+    provider: object
+    observation_provider: object | None = None
     events: EventBuffer
+    mode = "unknown"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -53,19 +55,27 @@ class ExplorerHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         path = urlparse(self.path).path
-        if path == "/api/health":
-            self._json({"status": "ok", "read_only": True})
-            return
-        if path == "/api/snapshot":
-            self._json(self.provider.snapshot())
-            return
-        if path == "/api/observation":
-            self._json(self.observation_provider.observe().as_dict())
-            return
-        if path == "/api/events":
-            self._json({"schema": "bdr-explorer-events/v0.1", "events": self.events.snapshot()})
-            return
-        super().do_GET()
+        try:
+            if path == "/api/health":
+                self._json({"status": "ok", "read_only": True, "mode": self.mode})
+                return
+            if path == "/api/snapshot":
+                self._json(self.provider.snapshot())
+                return
+            if path == "/api/observation":
+                if hasattr(self.provider, "observation"):
+                    self._json(self.provider.observation())
+                elif self.observation_provider is not None:
+                    self._json(self.observation_provider.observe().as_dict())
+                else:
+                    self._json({"error": "observation_unavailable"}, 503)
+                return
+            if path == "/api/events":
+                self._json({"schema": "bdr-explorer-events/v0.1", "events": self.events.snapshot()})
+                return
+            super().do_GET()
+        except Exception as exc:  # Explorer must fail visibly, never fabricate demo data.
+            self._json({"error": "live_source_unavailable", "detail": str(exc)}, 502)
 
     def log_message(self, format: str, *args) -> None:
         print("[explorer] " + (format % args))
@@ -75,23 +85,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Resolutive DB Explorer")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument(
-        "--demo",
-        action="store_true",
-        help="run with an in-memory demonstration database",
-    )
+    parser.add_argument("--demo", action="store_true", help="run with an in-memory demonstration database")
+    parser.add_argument("--memoria-url", help="Memoria.ia base URL used as the live read-only source")
+    parser.add_argument("--memoria-api-key", help="Memoria.ia administrator API key")
     args = parser.parse_args()
 
-    if not args.demo:
-        parser.error("v0.1 currently requires --demo; persistent read-only opening is planned for E02")
+    if args.demo:
+        database = build_demo_database()
+        ExplorerHandler.provider = ExplorerSnapshotProvider(database)
+        ExplorerHandler.observation_provider = PublicBDRObservationProvider(database)
+        ExplorerHandler.mode = "demo"
+    else:
+        if not args.memoria_url or not args.memoria_api_key:
+            parser.error("live mode requires --memoria-url and --memoria-api-key")
+        ExplorerHandler.provider = LiveMemoriaSnapshotProvider(args.memoria_url, args.memoria_api_key)
+        ExplorerHandler.observation_provider = None
+        ExplorerHandler.mode = "memoria.ia-live"
 
-    database = build_demo_database()
-    ExplorerHandler.provider = ExplorerSnapshotProvider(database)
-    ExplorerHandler.observation_provider = PublicBDRObservationProvider(database)
     ExplorerHandler.events = EventBuffer()
     server = ThreadingHTTPServer((args.host, args.port), ExplorerHandler)
     print(f"Resolutive DB Explorer: http://{args.host}:{args.port}")
-    print("Mode: read-only demo")
+    print(f"Mode: read-only {ExplorerHandler.mode}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
