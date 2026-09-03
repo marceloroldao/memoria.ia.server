@@ -17,33 +17,36 @@
     };
   }
 
-  const originalPersist = window.persistChatTurn;
-  if (typeof originalPersist !== 'function' || typeof window.api !== 'function') return;
+  // Do not depend on replacing the global persistChatTurn binding: capture the
+  // send action before app.js clears the textarea and promote only user text.
+  const send = document.getElementById('sendMemoria');
+  const message = document.getElementById('message');
+  if (!send || !message) return;
 
-  window.persistChatTurn = async function persistChatTurnWithProfile(role, text) {
-    const result = await originalPersist(role, text);
-    if (role !== 'user') return result;
+  let lastPromotion = '';
+  send.addEventListener('click', () => {
+    const text = message.value.trim();
+    if (!text) return;
+    const signature = `${text}\u0000${Date.now() >> 10}`;
+    if (signature === lastPromotion) return;
+    lastPromotion = signature;
 
-    try {
-      await window.api('/api/v1/conversation/ingest', {
-        method: 'POST',
-        body: JSON.stringify({
-          role: 'user',
-          text,
-          session_id: 'profile:web',
-          order: result.order,
-          timestamp: new Date().toISOString()
-        })
-      });
-      if (typeof window.log === 'function') {
-        window.log('chat_profile_memory_promoted', {profile: 'profile:web', order: result.order});
+    fetch('/api/v1/conversation/ingest', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        role: 'user',
+        text,
+        session_id: 'profile:web',
+        timestamp: new Date().toISOString()
+      })
+    }).then(async response => {
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || body.error || `${response.status} ${response.statusText}`);
       }
-    } catch (error) {
-      if (typeof window.log === 'function') {
-        window.log('chat_profile_memory_error', {profile: 'profile:web', error: error.message});
-      }
-      // The original session write remains authoritative if promotion fails.
-    }
-    return result;
-  };
+    }).catch(error => {
+      console.warn('[memoria] profile promotion failed:', error.message);
+    });
+  }, true);
 })();
