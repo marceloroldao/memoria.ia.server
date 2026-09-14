@@ -16,8 +16,7 @@ services:
       MEMORIA_API_KEY: ${MEMORIA_API_KEY}
     volumes:
       - model-gateway-data:/data
-    expose:
-      - "8090"
+    expose: ["8090"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3).read()"]
@@ -25,10 +24,8 @@ services:
       timeout: 5s
       start_period: 5s
       retries: 5
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - internal
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal]
 
   memoria:
     build:
@@ -63,12 +60,9 @@ services:
     volumes:
       - memoria-data:/data
     depends_on:
-      model-gateway:
-        condition: service_healthy
-    expose:
-      - "8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      model-gateway: {condition: service_healthy}
+    expose: ["8080"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v1/health', timeout=3).read()"]
@@ -76,10 +70,8 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 5
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - internal
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal]
 
   bdr-explorer:
     build:
@@ -87,23 +79,10 @@ services:
       dockerfile: docker/bdr-explorer/Dockerfile
       args:
         BDR_COMMIT: ${BDR_COMMIT:-1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e}
-    command:
-      - "python"
-      - "-m"
-      - "explorer.server"
-      - "--host"
-      - "0.0.0.0"
-      - "--port"
-      - "8765"
-      - "--memoria-url"
-      - "http://memoria:8080"
-      - "--memoria-api-key"
-      - "${MEMORIA_API_KEY}"
+    command: ["python", "-m", "explorer.server", "--host", "0.0.0.0", "--port", "8765", "--memoria-url", "http://memoria:8080", "--memoria-api-key", "${MEMORIA_API_KEY}"]
     depends_on:
-      memoria:
-        condition: service_healthy
-    expose:
-      - "8765"
+      memoria: {condition: service_healthy}
+    expose: ["8765"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8765/api/health', timeout=3)); assert d.get('status') == 'ok' and d.get('mode') == 'memoria.ia-live'"]
@@ -112,38 +91,20 @@ services:
       start_period: 10s
       retries: 5
     read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - internal
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal]
 
   llama:
     profiles: ["local-llm"]
     image: ${MEMORIA_LLAMA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
-    command:
-      - "-m"
-      - "/models/${MEMORIA_LLAMA_MODEL_FILE:-model.gguf}"
-      - "--host"
-      - "0.0.0.0"
-      - "--port"
-      - "8080"
-      - "-c"
-      - "${MEMORIA_LLAMA_CONTEXT_SIZE:-4096}"
-      - "-t"
-      - "${MEMORIA_LLAMA_THREADS:-4}"
-      - "--alias"
-      - "${MEMORIA_LLAMA_MODEL_ALIAS:-local-llama}"
+    command: ["-m", "/models/${MEMORIA_LLAMA_MODEL_FILE:-model.gguf}", "--host", "0.0.0.0", "--port", "8080", "-c", "${MEMORIA_LLAMA_CONTEXT_SIZE:-4096}", "-t", "${MEMORIA_LLAMA_THREADS:-4}", "--alias", "${MEMORIA_LLAMA_MODEL_ALIAS:-local-llama}"]
     volumes:
       - "${MEMORIA_LLAMA_MODELS_DIR:-./models}:/models:ro"
-    expose:
-      - "8080"
+    expose: ["8080"]
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - internal
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal]
 
   server:
     build:
@@ -164,13 +125,25 @@ services:
       MEMORIA_SERVER_SESSION_HOURS: ${MEMORIA_SERVER_SESSION_HOURS:-8}
       MEMORIA_SERVER_COOKIE_SECURE: ${MEMORIA_SERVER_COOKIE_SECURE:-false}
       MEMORIA_API_KEY: ${MEMORIA_API_KEY}
+      MEMORIA_CURIOSITY_ENABLED: ${MEMORIA_CURIOSITY_ENABLED:-true}
+      MEMORIA_CURIOSITY_DATA_DIR: /data/curiosity
+      MEMORIA_CURIOSITY_INTERVAL_SECONDS: ${MEMORIA_CURIOSITY_INTERVAL_SECONDS:-60}
+      MEMORIA_CURIOSITY_MAX_REQUESTS_HOUR: ${MEMORIA_CURIOSITY_MAX_REQUESTS_HOUR:-30}
+      MEMORIA_CURIOSITY_RANDOM_JUMP_RATE: ${MEMORIA_CURIOSITY_RANDOM_JUMP_RATE:-0.10}
+      MEMORIA_CURIOSITY_STAGNATION_LIMIT: ${MEMORIA_CURIOSITY_STAGNATION_LIMIT:-3}
+      MEMORIA_CURIOSITY_RESULTS_PER_SEARCH: ${MEMORIA_CURIOSITY_RESULTS_PER_SEARCH:-5}
+      MEMORIA_CURIOSITY_HTTP_TIMEOUT: ${MEMORIA_CURIOSITY_HTTP_TIMEOUT:-12}
+      MEMORIA_CURIOSITY_MAX_PAGE_BYTES: ${MEMORIA_CURIOSITY_MAX_PAGE_BYTES:-1500000}
+      MEMORIA_CURIOSITY_TEXT_LIMIT: ${MEMORIA_CURIOSITY_TEXT_LIMIT:-20000}
+      MEMORIA_CURIOSITY_NOVELTY_THRESHOLD: ${MEMORIA_CURIOSITY_NOVELTY_THRESHOLD:-0.25}
+      MEMORIA_CURIOSITY_SEED: ${MEMORIA_CURIOSITY_SEED:-0}
+      MEMORIA_CURIOSITY_SEARCH_URL: ${MEMORIA_CURIOSITY_SEARCH_URL:-https://html.duckduckgo.com/html/?q=QUERY}
+    volumes:
+      - server-data:/data
     depends_on:
-      memoria:
-        condition: service_healthy
-      bdr-explorer:
-        condition: service_healthy
-      model-gateway:
-        condition: service_healthy
+      memoria: {condition: service_healthy}
+      bdr-explorer: {condition: service_healthy}
+      model-gateway: {condition: service_healthy}
     ports:
       - "${MEMORIA_SERVER_PORT:-8780}:8780"
     restart: unless-stopped
@@ -181,16 +154,14 @@ services:
       start_period: 10s
       retries: 5
     read_only: true
-    tmpfs:
-      - /tmp
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      - internal
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal]
 
 volumes:
   memoria-data:
   model-gateway-data:
+  server-data:
 
 networks:
   internal:
