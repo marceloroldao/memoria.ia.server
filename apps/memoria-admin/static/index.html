@@ -13,6 +13,7 @@
     <div class="chatbox">
       <div class="chat-session-bar"><span id="chatSessionLabel">Conversa atual</span><span id="chatPersistenceState">BDR</span></div>
       <div class="test-toolbar">
+        <label>Modo <select id="chatAnswerMode"><option value="direct" selected>Memoria direta · sem LLM</option><option value="llm">LLM + Memoria</option></select></label>
         <button id="toggleAutoTest" type="button">▶ Teste autônomo</button>
         <span id="autoTestStatus">Inativo</span>
       </div>
@@ -20,7 +21,7 @@
         <label>Ciclos<select id="autoTestCycles"><option value="5">5</option><option value="10" selected>10</option><option value="25">25</option><option value="50">50</option></select></label>
         <label>Intervalo<select id="autoTestDelay"><option value="0">Sem espera</option><option value="500" selected>0,5 segundo</option><option value="1000">1 segundo</option><option value="3000">3 segundos</option></select></label>
         <div class="test-actions"><button id="startAutoTest" type="button">Iniciar</button><button id="pauseAutoTest" type="button" disabled>Pausar</button><button id="stopAutoTest" type="button" disabled>Encerrar</button><button id="downloadAutoReport" type="button" disabled>Relatório</button></div>
-        <p>O GPT cria os cenários; a Memoria.ia registra e resolve as relações em uma memória de teste isolada.</p>
+        <p>A curiosidade local cria os cenários sem LLM; a Memoria.ia registra e resolve as relações em uma memória de teste isolada, com saltos automáticos entre domínios.</p>
       </div>
       <div id="conversation" class="conversation"></div>
       <div class="composer"><textarea id="message" rows="3" placeholder="Digite sua mensagem..."></textarea><button id="sendMemoria">Enviar</button></div>
