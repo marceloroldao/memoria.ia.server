@@ -17,6 +17,7 @@ from auth import AuthManager
 from autonomous_tests import AutonomousTestManager
 from config import ShellConfig
 from curiosity_engine import CuriosityEngine
+from knowledge_bdr import KnowledgeBDR
 from learning_worker import LearningWorker
 from server_knowledge import ServerKnowledge
 
@@ -119,7 +120,7 @@ class ShellHandler(BaseHTTPRequestHandler):
         memoria=self._component_health(self.config.memoria_api_url,"/api/v1/health"); bdr=self._component_health(self.config.bdr_explorer_url,"/api/health"); gateway=self._component_health(self.config.model_gateway_url,"/health")
         states={memoria["status"],bdr["status"],gateway["status"]}; overall="online" if states=={"online"} else "degraded"
         k=self.knowledge.recent(limit=1)
-        self._write_json(200,{"schema":"memoria-server-health/v1","status":overall,"shell":{"status":"online"},"curiosity":{"status":self.curiosity.state.status,"enabled":self.curiosity.state.enabled},"knowledge":{"concepts":k["concepts"],"observations":k["observations"]},"components":{"memoria":memoria,"bdr_explorer":bdr,"model_gateway":gateway}})
+        self._write_json(200,{"schema":"memoria-server-health/v1","status":overall,"shell":{"status":"online"},"curiosity":{"status":self.curiosity.state.status,"enabled":self.curiosity.state.enabled},"knowledge":{"concepts":k["concepts"],"observations":k["observations"],"storage":"bdr-canonical"},"components":{"memoria":memoria,"bdr_explorer":bdr,"model_gateway":gateway}})
     def _dispatch(self):
         parsed=urlsplit(self.path); path=parsed.path
         if path == "/api/server/v1/health": self._health(); return
@@ -154,11 +155,12 @@ def main():
     ShellHandler.autotests=AutonomousTestManager(config)
     ShellHandler.curiosity=CuriosityEngine(config)
     ShellHandler.knowledge=ServerKnowledge(str(Path(config.curiosity_data_dir).parent / "knowledge"))
-    learner=LearningWorker(ShellHandler.knowledge, config.curiosity_data_dir)
+    knowledge_bdr=KnowledgeBDR(config.memoria_api_url, config.memoria_api_key, timeout=min(config.proxy_timeout_seconds, 15.0))
+    learner=LearningWorker(ShellHandler.knowledge, config.curiosity_data_dir, bdr=knowledge_bdr)
     ShellHandler.curiosity.start(); learner.start()
     server=ThreadingHTTPServer((config.host,config.port),ShellHandler)
     print(f"Memoria.ia Server: http://{config.host}:{config.port}")
-    print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge")
+    print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge (BDR canonical)")
     try: server.serve_forever()
     except KeyboardInterrupt: pass
     finally: learner.stop(); ShellHandler.curiosity.stop(); server.server_close()
