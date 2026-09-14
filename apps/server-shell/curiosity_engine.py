@@ -17,6 +17,7 @@ from urllib.parse import quote_plus, urlparse
 from urllib.request import Request, urlopen
 
 from search_probe import SearchProbe
+from search_providers import SearchProviderError, wikipedia_results
 
 PREFIX = "/api/server/v1/curiosity"
 SEEDS = [
@@ -92,6 +93,7 @@ class CuriosityState:
     hour_bucket: str = ""
     last_cycle_at: str | None = None
     last_error: str | None = None
+    last_provider: str | None = None
     trajectory: list[str] = field(default_factory=list)
 
 
@@ -130,37 +132,60 @@ class CuriosityEngine:
         if self.state.hour_bucket != bucket: self.state.hour_bucket=bucket; self.state.requests_this_hour=0
         if self.state.requests_this_hour >= self.config.curiosity_max_requests_hour: return False
         self.state.requests_this_hour += 1; return True
-    def _get(self, url: str, max_bytes: int | None=None) -> tuple[str,str]:
+    def _get(self, url: str, max_bytes: int | None=None, accept_json: bool=False) -> tuple[str,str]:
         _assert_external_url(url)
         if not self._budget(): raise RuntimeError("hourly request budget reached")
+        accept = "application/json,text/plain;q=0.9,*/*;q=0.1" if accept_json else "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1"
         req=Request(url,headers={
             "User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152.0 Safari/537.36 MemoriaIA-Curiosity/2.0",
-            "Accept":"text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+            "Accept":accept,
             "Accept-Language":"pt-BR,pt;q=0.9,en;q=0.7",
         })
         with urlopen(req,timeout=self.config.curiosity_http_timeout) as r:
             final_url=r.geturl()
             if final_url != url: _assert_external_url(final_url)
             ctype=r.headers.get("Content-Type","")
-            if "text/html" not in ctype and "text/plain" not in ctype: raise ValueError("unsupported content type")
+            allowed = ("application/json" in ctype) if accept_json else ("text/html" in ctype or "text/plain" in ctype)
+            if not allowed: raise ValueError(f"unsupported content type: {ctype}")
             data=r.read(max_bytes or self.config.curiosity_max_page_bytes)
             return data.decode("utf-8",errors="replace"), ctype
-    def _search(self, topic: str) -> list[tuple[str,str]]:
+    def _search_duckduckgo(self, topic: str) -> list[tuple[str,str]]:
         endpoint=self.config.curiosity_search_url.replace("{query}",quote_plus(topic)).replace("QUERY",quote_plus(topic))
         html,_=self._get(endpoint,750_000)
-        parser=SearchProbe(); parser.feed(html); self.state.searches += 1
+        parser=SearchProbe(); parser.feed(html)
         dedup=[]; seen=set()
         for title,url in parser.links:
             domain=urlparse(url).netloc.casefold()
             if not domain or "duckduckgo.com" in domain or url in seen: continue
             seen.add(url); dedup.append((title,url))
         results=dedup[:self.config.curiosity_results_per_search]
+        challenge=("captcha" in html.casefold() or "verify you are human" in html.casefold() or "anomaly" in html.casefold() or "duckduckgo" in html.casefold() and not results)
         if results:
-            self._event("search_results",f"Busca retornou {len(results)} resultado(s).",topic=topic,results=len(results))
+            self._event("search_results",f"DuckDuckGo retornou {len(results)} resultado(s).",topic=topic,provider="duckduckgo",results=len(results))
         else:
-            challenge=("captcha" in html.casefold() or "verify you are human" in html.casefold() or "anomaly" in html.casefold())
-            self._event("search_empty","Busca retornou zero links utilizáveis.",topic=topic,challenge_detected=challenge,response_bytes=len(html))
+            self._event("search_empty","DuckDuckGo retornou zero links utilizáveis.",topic=topic,provider="duckduckgo",challenge_detected=challenge,response_bytes=len(html))
         return results
+    def _search(self, topic: str) -> list[tuple[str,str]]:
+        self.state.searches += 1
+        providers = [
+            ("duckduckgo", self._search_duckduckgo),
+            ("wikipedia", lambda q: wikipedia_results(q, self._get, self.config.curiosity_results_per_search)),
+        ]
+        for name, provider in providers:
+            try:
+                results = provider(topic)
+            except Exception as exc:
+                self._event("provider_error",str(exc),topic=topic,provider=name)
+                continue
+            if results:
+                self.state.last_provider=name
+                if name != "duckduckgo":
+                    self._event("search_results",f"{name} retornou {len(results)} resultado(s).",topic=topic,provider=name,results=len(results))
+                return results
+            self._event("provider_fallback",f"Sem resultados em {name}; tentando próxima fonte.",topic=topic,provider=name)
+        self.state.last_provider=None
+        self._event("search_empty","Todos os provedores retornaram zero resultados utilizáveis.",topic=topic,provider="all")
+        return []
     def _read(self, url: str) -> dict[str,object]:
         html,_=self._get(url); parser=PageHTML(); parser.feed(html); text=parser.text[:self.config.curiosity_text_limit]; counts={}
         for w in _words(parser.title+" "+parser.description+" "+text): counts[w]=counts.get(w,0)+1
@@ -186,9 +211,9 @@ class CuriosityEngine:
             self._seen_urls.add(url)
             try:
                 page=self._read(url); terms=list(page["terms"]); novelty=len([t for t in terms if t not in self._known_terms])/max(1,len(terms)); self._known_terms.update(terms)
-                page.update({"kind":"evidence","message":str(page["title"] or title),"topic":topic,"novelty":round(novelty,3),"epistemic_status":"web_observation","confidence":0.25}); self._event(**page); discoveries += int(novelty >= self.config.curiosity_novelty_threshold)
+                page.update({"kind":"evidence","message":str(page["title"] or title),"topic":topic,"novelty":round(novelty,3),"epistemic_status":"web_observation","confidence":0.25,"provider":self.state.last_provider}); self._event(**page); discoveries += int(novelty >= self.config.curiosity_novelty_threshold)
                 if discoveries: break
-            except Exception as exc: self.state.errors += 1; self._event("page_error",str(exc),url=url,topic=topic)
+            except Exception as exc: self.state.errors += 1; self._event("page_error",str(exc),url=url,topic=topic,provider=self.state.last_provider)
         if discoveries: self.state.discoveries += discoveries; self.state.stagnation=0
         else: self.state.stagnation += 1
         self.state.status="sleeping"; self.state.last_error=None; self._save_state()
@@ -203,7 +228,7 @@ class CuriosityEngine:
     def snapshot(self, after: int=0) -> dict[str,object]:
         with self._lock: events=list(self._events)
         if after>0: events=events[after:]
-        return {"schema":"memoria-curiosity/v2","state":asdict(self.state),"configuration":{"interval_seconds":self.config.curiosity_interval_seconds,"max_requests_hour":self.config.curiosity_max_requests_hour,"random_jump_rate":self.config.curiosity_random_jump_rate,"stagnation_limit":self.config.curiosity_stagnation_limit,"web_enabled":True},"events":events,"event_count":len(self._events)}
+        return {"schema":"memoria-curiosity/v2","state":asdict(self.state),"configuration":{"interval_seconds":self.config.curiosity_interval_seconds,"max_requests_hour":self.config.curiosity_max_requests_hour,"random_jump_rate":self.config.curiosity_random_jump_rate,"stagnation_limit":self.config.curiosity_stagnation_limit,"web_enabled":True,"providers":["duckduckgo","wikipedia"]},"events":events,"event_count":len(self._events)}
     def action(self, action: str):
         if action == "pause": self.state.enabled=False; self.state.status="paused"
         elif action == "resume": self.state.enabled=True; self.state.status="running"; self._wake.set()
