@@ -11,6 +11,7 @@ from collections import deque
 from html.parser import HTMLParser
 import json
 from threading import Lock, Thread
+import time
 from urllib.parse import urldefrag, urljoin, urlparse
 
 from curiosity_engine import PageHTML, _words
@@ -32,10 +33,11 @@ class LinkParser(HTMLParser):
 
 
 class SiteIngestManager:
-    def __init__(self, curiosity, *, max_pages: int = 200, max_depth: int = 5) -> None:
+    def __init__(self, curiosity, *, max_pages: int = 200, max_depth: int = 5, page_delay_seconds: float = 1.0) -> None:
         self.curiosity = curiosity
         self.max_pages = max(1, max_pages)
         self.max_depth = max(0, max_depth)
+        self.page_delay_seconds = max(0.1, float(page_delay_seconds))
         self._lock = Lock()
         self._jobs: dict[str, dict[str, object]] = {}
 
@@ -69,6 +71,7 @@ class SiteIngestManager:
                 "external_links_found": 0,
                 "max_pages": self.max_pages,
                 "max_depth": self.max_depth,
+                "page_delay_seconds": self.page_delay_seconds,
             }
         Thread(target=self._run, args=(job_id, url), daemon=True, name=f"site-ingest-{job_id[-8:]}").start()
         return self.status(job_id)
@@ -161,6 +164,8 @@ class SiteIngestManager:
                     pages_failed += 1
                     self.curiosity._event("site_ingest_page_error", str(exc), url=url, job_id=job_id, depth=depth)
                     self._update(job_id, pages_failed=pages_failed, current_url=url)
+                # Yield between pages so chat/API traffic and BDR writes remain responsive.
+                time.sleep(self.page_delay_seconds)
 
             status = "completed" if not queue else "limit_reached"
             self._update(
