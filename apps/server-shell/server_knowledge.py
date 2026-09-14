@@ -31,18 +31,24 @@ def _tokens(text: str) -> list[str]:
     return [t.casefold() for t in TOKEN_RE.findall(text or "") if t.casefold() not in STOP]
 
 
-def _clean_terms(terms: list[str], provider: str) -> list[str]:
-    cleaned = []
+def _normalize_terms(terms: list[str]) -> list[str]:
+    normalized = []
     for raw in terms:
         term = str(raw).casefold().strip(" _-")
         if len(term) < 4 or term in STOP:
             continue
-        if provider == "wikipedia" and term in WIKI_UI_NOISE:
-            continue
         if term.isdigit() and len(term) != 4:
             continue
-        cleaned.append(term)
-    return list(dict.fromkeys(cleaned))
+        normalized.append(term)
+    return list(dict.fromkeys(normalized))
+
+
+def _semantic_weight(term: str, provider: str) -> tuple[float, str]:
+    # Nothing is discarded after it becomes an addressable symbol. We only
+    # annotate how useful it is for semantic resolution in the current context.
+    if provider == "wikipedia" and term in WIKI_UI_NOISE:
+        return 0.08, "interface_noise"
+    return 1.0, "content"
 
 
 @dataclass
@@ -51,6 +57,8 @@ class KnowledgeItem:
     label: str
     observations: int = 0
     confidence: float = 0.0
+    semantic_weight: float = 1.0
+    semantic_class: str = "content"
     providers: dict[str, int] = field(default_factory=dict)
     sources: list[dict[str, str]] = field(default_factory=list)
     related: dict[str, int] = field(default_factory=dict)
@@ -73,6 +81,8 @@ class ServerKnowledge:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
             self.observations = int(raw.get("observations", 0))
             for key, item in raw.get("items", {}).items():
+                item.setdefault("semantic_weight", 1.0)
+                item.setdefault("semantic_class", "content")
                 self.items[key] = KnowledgeItem(**item)
         except Exception:
             self.items = {}
@@ -88,8 +98,9 @@ class ServerKnowledge:
         self.dir.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
         payload = {
-            "schema": "memoria-server-knowledge/v2",
+            "schema": "memoria-server-knowledge/v3",
             "storage_role": "local_cache_rebuildable_from_bdr",
+            "principle": "address_first_weight_later",
             "observations": self.observations,
             "items": {k: asdict(v) for k, v in self.items.items()},
         }
@@ -103,21 +114,34 @@ class ServerKnowledge:
         provider = str(evidence.get("provider") or "web").casefold()
         url = str(evidence.get("url") or "")
         supplied = [str(x) for x in (evidence.get("terms") or []) if str(x).strip()]
-        terms = _clean_terms(supplied, provider)
+        terms = _normalize_terms(supplied)
         if not terms:
             counts = Counter(_tokens(" ".join([title, description, excerpt])))
-            terms = _clean_terms([term for term, n in counts.most_common(24) if n >= 2], provider)
+            terms = _normalize_terms([term for term, n in counts.most_common(24) if n >= 2])
         unique = terms[:12]
         if not unique:
-            return {"learned": 0, "keys": [], "filtered": len(supplied)}
+            return {"learned": 0, "keys": [], "addressed": 0}
         now = str(evidence.get("time") or _now())
         with self._lock:
             self.observations += 1
             for term in unique:
+                weight, semantic_class = _semantic_weight(term, provider)
                 item = self.items.get(term)
                 if item is None:
-                    item = KnowledgeItem(key=term, label=term, first_seen_at=now)
+                    item = KnowledgeItem(
+                        key=term,
+                        label=term,
+                        first_seen_at=now,
+                        semantic_weight=weight,
+                        semantic_class=semantic_class,
+                    )
                     self.items[term] = item
+                else:
+                    # A term first seen as UI noise can later become real content
+                    # in another context. Keep the strongest observed semantics.
+                    if weight > item.semantic_weight:
+                        item.semantic_weight = weight
+                        item.semantic_class = semantic_class
                 item.observations += 1
                 item.last_seen_at = now
                 item.providers[provider] = item.providers.get(provider, 0) + 1
@@ -125,7 +149,8 @@ class ServerKnowledge:
                     item.sources = ([{"url": url, "provider": provider, "title": title[:180]}] + item.sources)[:8]
                 item.excerpt = (description or excerpt or title)[:700]
                 diversity = len(item.providers)
-                item.confidence = round(min(0.95, 0.20 + 0.12 * min(item.observations, 5) + 0.05 * min(diversity, 3)), 3)
+                base_conf = min(0.95, 0.20 + 0.12 * min(item.observations, 5) + 0.05 * min(diversity, 3))
+                item.confidence = round(base_conf, 3)
             for a in unique:
                 ia = self.items[a]
                 for b in unique:
@@ -134,7 +159,7 @@ class ServerKnowledge:
                 ia.related = dict(sorted(ia.related.items(), key=lambda kv: (-kv[1], kv[0]))[:24])
             if save:
                 self._save()
-        return {"learned": len(unique), "keys": unique, "filtered": max(0, len(supplied) - len(unique))}
+        return {"learned": len(unique), "keys": unique, "addressed": len(unique)}
 
     def rebuild(self, evidence_rows: list[dict[str, object]]) -> dict[str, int]:
         with self._lock:
@@ -155,7 +180,8 @@ class ServerKnowledge:
                 key_tokens = set(_tokens(item.label)) | {item.key}
                 overlap = len(q & key_tokens)
                 related_overlap = sum(1 for r in item.related if r in q)
-                score = overlap * 10 + related_overlap * 2 + min(item.observations, 5) + item.confidence
+                raw_score = overlap * 10 + related_overlap * 2 + min(item.observations, 5) + item.confidence
+                score = raw_score * max(0.01, item.semantic_weight)
                 if score > 0:
                     scored.append((score, item))
             scored.sort(key=lambda x: (-x[0], -x[1].confidence, -x[1].observations, x[1].label))
@@ -164,17 +190,19 @@ class ServerKnowledge:
                 hits.append({
                     "key": item.key, "label": item.label, "score": round(score, 3),
                     "confidence": item.confidence, "observations": item.observations,
+                    "semantic_weight": item.semantic_weight, "semantic_class": item.semantic_class,
                     "excerpt": item.excerpt, "providers": item.providers, "sources": item.sources[:3],
                     "related": list(item.related.items())[:8], "first_seen_at": item.first_seen_at,
                     "last_seen_at": item.last_seen_at,
                 })
-            return {"schema": "memoria-server-knowledge-query/v2", "query": text, "hits": hits, "count": len(hits)}
+            return {"schema": "memoria-server-knowledge-query/v3", "query": text, "hits": hits, "count": len(hits)}
 
     def recent(self, limit: int = 20) -> dict[str, object]:
         with self._lock:
             items = sorted(self.items.values(), key=lambda x: x.last_seen_at, reverse=True)[:max(1, min(limit, 100))]
             return {
-                "schema": "memoria-server-knowledge/v2", "storage": "bdr+journal/cache",
+                "schema": "memoria-server-knowledge/v3", "storage": "bdr-canonical/cache",
+                "principle": "address_first_weight_later",
                 "observations": self.observations, "concepts": len(self.items), "items": [asdict(x) for x in items],
             }
 
