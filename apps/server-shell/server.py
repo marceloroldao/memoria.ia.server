@@ -20,6 +20,7 @@ from curiosity_engine import CuriosityEngine
 from knowledge_bdr import KnowledgeBDR
 from learning_worker import LearningWorker
 from server_knowledge import ServerKnowledge
+from site_ingest import SiteIngestManager
 
 APPS_DIR = Path(__file__).resolve().parents[1]
 SHELL_STATIC = Path(__file__).with_name("static")
@@ -54,7 +55,7 @@ def static_target(path: str) -> Path | None:
 
 
 class ShellHandler(BaseHTTPRequestHandler):
-    config = ShellConfig(); auth: AuthManager; autotests: AutonomousTestManager; curiosity: CuriosityEngine; knowledge: ServerKnowledge
+    config = ShellConfig(); auth: AuthManager; autotests: AutonomousTestManager; curiosity: CuriosityEngine; knowledge: ServerKnowledge; site_ingest: SiteIngestManager
     def _session_token(self):
         raw=self.headers.get("Cookie")
         if not raw: return None
@@ -131,6 +132,7 @@ class ShellHandler(BaseHTTPRequestHandler):
         if not authenticated:
             self._write_json(401,{"error":"authentication_required"}) if path.startswith("/api/") else self._redirect("/login"); return
         query=parse_qs(parsed.query)
+        if self.site_ingest.dispatch(self,path,query): return
         if self.curiosity.dispatch(self,path,query): return
         if self.knowledge.dispatch(self,path,query): return
         if self.autotests.dispatch(self,path,query): return
@@ -154,13 +156,14 @@ def main():
     ShellHandler.auth=AuthManager(config.admin_username,config.admin_password,session_seconds=config.session_hours*3600)
     ShellHandler.autotests=AutonomousTestManager(config)
     ShellHandler.curiosity=CuriosityEngine(config)
+    ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity, max_pages=200, max_depth=5)
     ShellHandler.knowledge=ServerKnowledge(str(Path(config.curiosity_data_dir).parent / "knowledge"))
     knowledge_bdr=KnowledgeBDR(config.memoria_api_url, config.memoria_api_key, timeout=min(config.proxy_timeout_seconds, 15.0))
     learner=LearningWorker(ShellHandler.knowledge, config.curiosity_data_dir, bdr=knowledge_bdr)
     ShellHandler.curiosity.start(); learner.start()
     server=ThreadingHTTPServer((config.host,config.port),ShellHandler)
     print(f"Memoria.ia Server: http://{config.host}:{config.port}")
-    print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge (BDR canonical)")
+    print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge (BDR canonical) + Site Ingest")
     try: server.serve_forever()
     except KeyboardInterrupt: pass
     finally: learner.stop(); ShellHandler.curiosity.stop(); server.server_close()
