@@ -5,6 +5,7 @@ remains a cache/index that can be rebuilt by replaying these evidence episodes.
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -21,10 +22,11 @@ class KnowledgeBDR:
     EVENT_TYPE = "server_knowledge_evidence"
     SESSION_ID = "server:knowledge"
 
-    def __init__(self, memoria_api_url: str, memoria_api_key: str = "", timeout: float = 10.0) -> None:
+    def __init__(self, memoria_api_url: str, memoria_api_key: str = "", timeout: float = 10.0, write_lock=None) -> None:
         self.base = memoria_api_url.rstrip("/")
         self.api_key = memoria_api_key
         self.timeout = timeout
+        self.write_lock = write_lock
 
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
@@ -38,9 +40,6 @@ class KnowledgeBDR:
         episode_id = f"knowledge:{digest}"
         payload = {
             "episode_id": episode_id,
-            # Episodic API accepts only user|assistant. This is machine-produced
-            # evidence, therefore assistant is the valid transport role; semantic
-            # origin remains explicit in event_type/topics/text provenance.
             "role": "assistant",
             "text": canonical,
             "session_id": self.SESSION_ID,
@@ -55,9 +54,11 @@ class KnowledgeBDR:
             headers=self._headers(),
             method="POST",
         )
+        guard = self.write_lock if self.write_lock is not None else nullcontext()
         try:
-            with urlopen(request, timeout=self.timeout) as response:
-                response.read()
+            with guard:
+                with urlopen(request, timeout=self.timeout) as response:
+                    response.read()
         except HTTPError as exc:
             if exc.code == 409:
                 return episode_id
