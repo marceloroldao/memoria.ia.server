@@ -28,8 +28,10 @@ class ShellConfig:
     memoria_api_key: str = ""
     curiosity_enabled: bool = True
     curiosity_data_dir: str = "/data/curiosity"
+    # Continuous pacing is primarily controlled by the cycle interval. The
+    # hourly counter remains only as a high emergency fuse against loops.
     curiosity_interval_seconds: float = 60.0
-    curiosity_max_requests_hour: int = 120
+    curiosity_max_requests_hour: int = 3600
     curiosity_random_jump_rate: float = 0.10
     curiosity_stagnation_limit: int = 3
     curiosity_results_per_search: int = 5
@@ -60,7 +62,7 @@ class ShellConfig:
             curiosity_enabled=_bool_env("MEMORIA_CURIOSITY_ENABLED", cls.curiosity_enabled),
             curiosity_data_dir=os.getenv("MEMORIA_CURIOSITY_DATA_DIR", cls.curiosity_data_dir),
             curiosity_interval_seconds=max(5.0, float(os.getenv("MEMORIA_CURIOSITY_INTERVAL_SECONDS", str(cls.curiosity_interval_seconds)))),
-            curiosity_max_requests_hour=max(1, int(os.getenv("MEMORIA_CURIOSITY_MAX_REQUESTS_HOUR", str(cls.curiosity_max_requests_hour)))),
+            curiosity_max_requests_hour=max(100, int(os.getenv("MEMORIA_CURIOSITY_MAX_REQUESTS_HOUR", str(cls.curiosity_max_requests_hour)))),
             curiosity_random_jump_rate=min(1.0, max(0.0, float(os.getenv("MEMORIA_CURIOSITY_RANDOM_JUMP_RATE", str(cls.curiosity_random_jump_rate))))),
             curiosity_stagnation_limit=max(1, int(os.getenv("MEMORIA_CURIOSITY_STAGNATION_LIMIT", str(cls.curiosity_stagnation_limit)))),
             curiosity_results_per_search=max(1, min(10, int(os.getenv("MEMORIA_CURIOSITY_RESULTS_PER_SEARCH", str(cls.curiosity_results_per_search))))),
