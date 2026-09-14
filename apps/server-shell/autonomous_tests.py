@@ -1,10 +1,15 @@
-"""Server-side autonomous relation tests for Memoria.ia."""
+"""Server-side autonomous relation tests for Memoria.ia.
+
+V2 deliberately keeps the exploration loop independent from an LLM: scenarios are
+created locally, ingested as facts and resolved directly through Memoria.ia.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
+import random
 import re
 from threading import Event, Lock, Thread
 import time
@@ -15,6 +20,7 @@ from uuid import uuid4
 
 
 PREFIX = "/api/server/v1/autotests"
+TOPICS = ("attribute", "possession", "location", "sequence", "correction", "relation")
 
 
 class UpstreamError(RuntimeError):
@@ -32,6 +38,7 @@ def _normalize(value: object) -> str:
 
 
 def extract_json_object(text: str) -> dict[str, object]:
+    """Backward-compatible helper kept for old test/report consumers."""
     decoder = json.JSONDecoder()
     for index, char in enumerate(text):
         if char != "{":
@@ -42,7 +49,7 @@ def extract_json_object(text: str) -> dict[str, object]:
             continue
         if isinstance(value, dict):
             return value
-    raise ValueError("O agente GPT não retornou um cenário JSON válido")
+    raise ValueError("Nenhum objeto JSON válido foi encontrado")
 
 
 def evaluate_expected(expected_terms: list[str], response: object) -> bool:
@@ -93,6 +100,8 @@ class TestRun:
     cycles: int
     delay_ms: int
     session_id: str
+    jump_rate: float = 0.35
+    seed: int = 0
     status: str = "running"
     created_at: str = field(default_factory=_now)
     finished_at: str | None = None
@@ -102,16 +111,98 @@ class TestRun:
     input_tokens: int = 0
     output_tokens: int = 0
     estimated_cost_usd: float = 0.0
+    jumps: int = 0
+    last_topic: str | None = None
+    topic_streak: int = 0
     events: list[dict[str, object]] = field(default_factory=list)
     pause: Event = field(default_factory=Event, repr=False)
     stop: Event = field(default_factory=Event, repr=False)
 
     def __post_init__(self) -> None:
         self.pause.set()
+        if not self.seed:
+            self.seed = int(self.run_id[:8], 16) if re.fullmatch(r"[0-9a-f]+", self.run_id[:8]) else 1
+
+
+class CuriosityGenerator:
+    """Local exploration generator with reproducible random topic jumps."""
+
+    COLORS = ("azul", "verde", "vermelho", "preto", "branco", "amarelo")
+    OBJECTS = ("caderno", "chave", "sensor", "capacete", "livro", "drone")
+    PLACES = ("oficina", "garagem", "laboratório", "estante", "sala", "depósito")
+    PEOPLE = ("Ana", "Bruno", "Caio", "Dora", "Eva", "Fábio")
+
+    @staticmethod
+    def _rng(run: TestRun, cycle: int) -> random.Random:
+        return random.Random((run.seed << 16) ^ (cycle * 0x9E3779B1))
+
+    def choose_topic(self, run: TestRun, cycle: int) -> tuple[str, bool]:
+        rng = self._rng(run, cycle)
+        if run.last_topic is None:
+            return rng.choice(TOPICS), False
+
+        force_jump = run.topic_streak >= 2
+        random_jump = rng.random() < run.jump_rate
+        if force_jump or random_jump:
+            candidates = [topic for topic in TOPICS if topic != run.last_topic]
+            return rng.choice(candidates), True
+        return run.last_topic, False
+
+    def build(self, run: TestRun, cycle: int) -> dict[str, object]:
+        rng = self._rng(run, cycle)
+        topic, jumped = self.choose_topic(run, cycle)
+        token = f"{run.run_id[:4]}{cycle:02d}"
+        person = rng.choice(self.PEOPLE)
+        obj = rng.choice(self.OBJECTS)
+        color = rng.choice(self.COLORS)
+        place = rng.choice(self.PLACES)
+
+        if topic == "attribute":
+            subject = f"objeto-{token}"
+            assertion = f"O {subject} é {color}."
+            question = f"Qual é a cor do {subject}?"
+            expected = [subject, color]
+        elif topic == "possession":
+            subject = f"{obj}-{token}"
+            assertion = f"{person} possui o {subject}."
+            question = f"Quem possui o {subject}?"
+            expected = [person, subject]
+        elif topic == "location":
+            subject = f"{obj}-{token}"
+            assertion = f"O {subject} está na {place}."
+            question = f"Onde está o {subject}?"
+            expected = [subject, place]
+        elif topic == "sequence":
+            first = f"etapa-{token}-A"
+            second = f"etapa-{token}-B"
+            assertion = f"{first} acontece antes de {second}."
+            question = f"O que acontece antes de {second}?"
+            expected = [first, second]
+        elif topic == "correction":
+            subject = f"dispositivo-{token}"
+            old_color = self.COLORS[(self.COLORS.index(color) + 1) % len(self.COLORS)]
+            assertion = f"O {subject} era {old_color}, mas agora é {color}."
+            question = f"Qual é a cor atual do {subject}?"
+            expected = [subject, color]
+        else:
+            other = rng.choice([name for name in self.PEOPLE if name != person])
+            assertion = f"{person} trabalha com {other} no projeto-{token}."
+            question = f"Com quem {person} trabalha no projeto-{token}?"
+            expected = [person, other, f"projeto-{token}"]
+
+        return {
+            "assertion": assertion,
+            "question": question,
+            "expected_terms": expected,
+            "provider": "local-curiosity",
+            "model": None,
+            "topic": topic,
+            "jumped": jumped,
+        }
 
 
 class AutonomousTestManager:
-    """Owns bounded in-memory test runs and streams snapshots to the UI."""
+    """Owns bounded in-memory no-LLM exploration runs and streams snapshots to the UI."""
 
     def __init__(self, config) -> None:
         self.client = MemoriaClient(
@@ -119,6 +210,7 @@ class AutonomousTestManager:
             config.memoria_api_key,
             max(config.autotest_timeout_seconds, config.proxy_timeout_seconds),
         )
+        self.curiosity = CuriosityGenerator()
         self._runs: dict[str, TestRun] = {}
         self._lock = Lock()
 
@@ -143,61 +235,50 @@ class AutonomousTestManager:
                 event["details"] = details
             run.events.append(event)
 
-    def _scenario_prompt(self, cycle: int, previous: list[dict[str, object]]) -> str:
-        history = [str(item.get("text", "")) for item in previous[-4:]]
-        return (
-            "Você é um agente de teste da Memoria.ia. Crie UM pequeno cenário factual "
-            "em português, diferente dos anteriores, com relações simples e verificáveis. "
-            "Pode testar atributos, posse, localização, parentesco, sequência ou correção. "
-            "Responda exclusivamente com JSON válido no formato: "
-            '{"assertion":"frase que ensina os fatos","question":"pergunta sobre os fatos",'
-            '"expected_terms":["termos obrigatórios na resposta"]}. '
-            f"Ciclo: {cycle}. Cenários recentes: {json.dumps(history, ensure_ascii=False)}"
-        )
-
     def _generate_scenario(self, run: TestRun, cycle: int) -> dict[str, object]:
-        generated = self.client.post(
-            "/api/v1/chat",
-            {
-                "message": self._scenario_prompt(cycle, run.events),
-                "mode": "baseline",
-                "baseline_context": [],
-                "memory_keys": [],
-                "scope": {"application_id": "server-autotest", "agent_id": run.run_id},
-            },
-        )
-        metrics = generated.get("metrics") or {}
-        if isinstance(metrics, dict):
-            run.input_tokens += int(metrics.get("input_tokens") or 0)
-            run.output_tokens += int(metrics.get("output_tokens") or 0)
-            run.estimated_cost_usd += float(metrics.get("estimated_cost_usd") or 0.0)
-        scenario = extract_json_object(str(generated.get("text", "")))
-        assertion = str(scenario.get("assertion", "")).strip()
-        question = str(scenario.get("question", "")).strip()
-        expected = scenario.get("expected_terms")
-        if not assertion or not question or not isinstance(expected, list) or not expected:
-            raise ValueError("O cenário do agente GPT está incompleto")
-        return {
-            "assertion": assertion,
-            "question": question,
-            "expected_terms": [str(item) for item in expected if str(item).strip()][:12],
-            "provider": metrics.get("provider") if isinstance(metrics, dict) else None,
-            "model": metrics.get("model") if isinstance(metrics, dict) else None,
-        }
+        scenario = self.curiosity.build(run, cycle)
+        topic = str(scenario["topic"])
+        jumped = bool(scenario["jumped"])
+        if jumped:
+            run.jumps += 1
+        if run.last_topic == topic:
+            run.topic_streak += 1
+        else:
+            run.last_topic = topic
+            run.topic_streak = 1
+        return scenario
 
     def _run(self, run: TestRun) -> None:
-        self._event(run, "system", f"Teste autônomo iniciado: {run.cycles} ciclos.", kind="status")
+        self._event(
+            run,
+            "system",
+            f"Curiosidade autônoma iniciada: {run.cycles} ciclos, sem LLM.",
+            kind="status",
+            details={"jump_rate": run.jump_rate, "seed": run.seed},
+        )
         try:
             for cycle in range(1, run.cycles + 1):
                 run.pause.wait()
                 if run.stop.is_set():
                     break
                 scenario = self._generate_scenario(run, cycle)
+                if scenario.get("jumped"):
+                    self._event(
+                        run,
+                        "curiosity",
+                        f"Salto aleatório para o domínio {scenario['topic']}.",
+                        kind="jump",
+                        details={"cycle": cycle, "topic": scenario["topic"]},
+                    )
                 self._event(
                     run,
                     "agent",
                     str(scenario["assertion"]),
-                    details={"cycle": cycle, "provider": scenario.get("provider"), "model": scenario.get("model")},
+                    details={
+                        "cycle": cycle,
+                        "provider": scenario.get("provider"),
+                        "topic": scenario.get("topic"),
+                    },
                 )
                 ingested = self.client.post(
                     "/api/v1/conversation/ingest",
@@ -229,16 +310,20 @@ class AutonomousTestManager:
                 )
                 if passed:
                     run.passed += 1
-                    verdict = "✅ Relações recuperadas corretamente."
+                    verdict = "✅ Intenção colapsou para a relação esperada."
                 else:
                     run.failed += 1
-                    verdict = "❌ A resposta não correspondeu ao gabarito."
+                    verdict = "❌ A resolução não correspondeu ao gabarito."
                 self._event(
                     run,
                     "evaluator",
                     verdict,
                     kind="pass" if passed else "fail",
-                    details={"expected_terms": scenario["expected_terms"], "cycle": cycle},
+                    details={
+                        "expected_terms": scenario["expected_terms"],
+                        "cycle": cycle,
+                        "topic": scenario["topic"],
+                    },
                 )
                 run.completed_cycles = cycle
                 if run.delay_ms and run.stop.wait(run.delay_ms / 1000):
@@ -251,11 +336,26 @@ class AutonomousTestManager:
             run.finished_at = _now()
             self._event(run, "system", "Teste finalizado. Relatório disponível.", kind="status")
 
-    def start(self, cycles: int, delay_ms: int) -> TestRun:
+    def start(
+        self,
+        cycles: int,
+        delay_ms: int,
+        *,
+        jump_rate: float = 0.35,
+        seed: int | None = None,
+    ) -> TestRun:
         cycles = max(1, min(int(cycles), 50))
         delay_ms = max(0, min(int(delay_ms), 10000))
+        jump_rate = max(0.0, min(float(jump_rate), 1.0))
         run_id = uuid4().hex[:12]
-        run = TestRun(run_id, cycles, delay_ms, f"autotest:{run_id}")
+        run = TestRun(
+            run_id,
+            cycles,
+            delay_ms,
+            f"autotest:{run_id}",
+            jump_rate=jump_rate,
+            seed=int(seed or 0),
+        )
         with self._lock:
             finished = [key for key, value in self._runs.items() if value.status not in {"running", "paused"}]
             for key in finished[:-19]:
@@ -290,18 +390,26 @@ class AutonomousTestManager:
             events = [dict(event) for event in run.events if int(event["seq"]) > after]
         total = run.passed + run.failed
         return {
-            "schema": "memoria-autotest-run/v1",
+            "schema": "memoria-autotest-run/v2",
             "run_id": run.run_id,
             "status": run.status,
             "cycles": run.cycles,
             "completed_cycles": run.completed_cycles,
+            "mode": "local-curiosity-no-llm",
+            "curiosity": {
+                "jump_rate": run.jump_rate,
+                "jumps": run.jumps,
+                "seed": run.seed,
+                "last_topic": run.last_topic,
+                "topic_streak": run.topic_streak,
+            },
             "summary": {
                 "passed": run.passed,
                 "failed": run.failed,
                 "accuracy": (run.passed / total) if total else None,
-                "input_tokens": run.input_tokens,
-                "output_tokens": run.output_tokens,
-                "estimated_cost_usd": run.estimated_cost_usd,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "estimated_cost_usd": 0.0,
             },
             "created_at": run.created_at,
             "finished_at": run.finished_at,
@@ -319,7 +427,12 @@ class AutonomousTestManager:
                 if raw is None:
                     return True
                 body = json.loads(raw.decode("utf-8") or "{}")
-                run = self.start(body.get("cycles", 5), body.get("delay_ms", 500))
+                run = self.start(
+                    body.get("cycles", 5),
+                    body.get("delay_ms", 500),
+                    jump_rate=body.get("jump_rate", 0.35),
+                    seed=body.get("seed"),
+                )
                 handler._write_json(202, self.snapshot(run.run_id))
                 return True
             if len(parts) == 1 and handler.command == "GET":
