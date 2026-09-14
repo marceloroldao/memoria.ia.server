@@ -29,7 +29,7 @@ class ShellConfig:
     curiosity_enabled: bool = True
     curiosity_data_dir: str = "/data/curiosity"
     curiosity_interval_seconds: float = 60.0
-    curiosity_max_requests_hour: int = 30
+    curiosity_max_requests_hour: int = 120
     curiosity_random_jump_rate: float = 0.10
     curiosity_stagnation_limit: int = 3
     curiosity_results_per_search: int = 5
