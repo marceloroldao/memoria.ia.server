@@ -7,12 +7,13 @@ from threading import Event, Thread
 
 
 class LearningWorker:
-    def __init__(self, knowledge, curiosity_data_dir: str, bdr=None, poll_seconds: float = 2.0) -> None:
+    def __init__(self, knowledge, curiosity_data_dir: str, bdr=None, poll_seconds: float = 2.0, max_evidence_per_cycle: int = 5) -> None:
         self.knowledge = knowledge
         self.bdr = bdr
         self.events_file = Path(curiosity_data_dir) / "events.jsonl"
         self.cursor_file = Path(curiosity_data_dir) / "knowledge.cursor"
         self.poll_seconds = max(0.5, poll_seconds)
+        self.max_evidence_per_cycle = max(1, int(max_evidence_per_cycle))
         self._stop = Event()
         self._thread = Thread(target=self._loop, daemon=True, name="server-learning-worker")
         self.offset = self._load_cursor()
@@ -50,9 +51,10 @@ class LearningWorker:
         if self.offset > size:
             self.offset = 0
         learned = 0
+        evidence_processed = 0
         with self.events_file.open("r", encoding="utf-8") as fh:
             fh.seek(self.offset)
-            while True:
+            while evidence_processed < self.max_evidence_per_cycle:
                 line = fh.readline()
                 if not line:
                     break
@@ -70,6 +72,7 @@ class LearningWorker:
                     self.bdr.append_evidence(event)
                 result = self.knowledge.learn_from_evidence(event)
                 self.offset = next_offset
+                evidence_processed += 1
                 if result.get("learned"):
                     learned += int(result["learned"])
                     suffix = f"; filtrados={result.get('filtered', 0)}" if result.get("filtered") else ""
