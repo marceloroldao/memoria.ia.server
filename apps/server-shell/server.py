@@ -17,6 +17,8 @@ from auth import AuthManager
 from autonomous_tests import AutonomousTestManager
 from config import ShellConfig
 from curiosity_engine import CuriosityEngine
+from learning_worker import LearningWorker
+from server_knowledge import ServerKnowledge
 
 APPS_DIR = Path(__file__).resolve().parents[1]
 SHELL_STATIC = Path(__file__).with_name("static")
@@ -51,7 +53,7 @@ def static_target(path: str) -> Path | None:
 
 
 class ShellHandler(BaseHTTPRequestHandler):
-    config = ShellConfig(); auth: AuthManager; autotests: AutonomousTestManager; curiosity: CuriosityEngine
+    config = ShellConfig(); auth: AuthManager; autotests: AutonomousTestManager; curiosity: CuriosityEngine; knowledge: ServerKnowledge
     def _session_token(self):
         raw=self.headers.get("Cookie")
         if not raw: return None
@@ -116,7 +118,8 @@ class ShellHandler(BaseHTTPRequestHandler):
     def _health(self):
         memoria=self._component_health(self.config.memoria_api_url,"/api/v1/health"); bdr=self._component_health(self.config.bdr_explorer_url,"/api/health"); gateway=self._component_health(self.config.model_gateway_url,"/health")
         states={memoria["status"],bdr["status"],gateway["status"]}; overall="online" if states=={"online"} else "degraded"
-        self._write_json(200,{"schema":"memoria-server-health/v1","status":overall,"shell":{"status":"online"},"curiosity":{"status":self.curiosity.state.status,"enabled":self.curiosity.state.enabled},"components":{"memoria":memoria,"bdr_explorer":bdr,"model_gateway":gateway}})
+        k=self.knowledge.recent(limit=1)
+        self._write_json(200,{"schema":"memoria-server-health/v1","status":overall,"shell":{"status":"online"},"curiosity":{"status":self.curiosity.state.status,"enabled":self.curiosity.state.enabled},"knowledge":{"concepts":k["concepts"],"observations":k["observations"]},"components":{"memoria":memoria,"bdr_explorer":bdr,"model_gateway":gateway}})
     def _dispatch(self):
         parsed=urlsplit(self.path); path=parsed.path
         if path == "/api/server/v1/health": self._health(); return
@@ -126,8 +129,10 @@ class ShellHandler(BaseHTTPRequestHandler):
         if path in {"/login.css","/login.js"}: self._serve_static(static_target(path)); return
         if not authenticated:
             self._write_json(401,{"error":"authentication_required"}) if path.startswith("/api/") else self._redirect("/login"); return
-        if self.curiosity.dispatch(self,path,parse_qs(parsed.query)): return
-        if self.autotests.dispatch(self,path,parse_qs(parsed.query)): return
+        query=parse_qs(parsed.query)
+        if self.curiosity.dispatch(self,path,query): return
+        if self.knowledge.dispatch(self,path,query): return
+        if self.autotests.dispatch(self,path,query): return
         if path == "/api/server/v1/session": self._write_json(200,{"authenticated":True,"username":self.config.admin_username}); return
         if path == "/api/server/v1/logout": self._write_json(405,{"error":"method_not_allowed"},{"Allow":"POST"}) if self.command != "POST" else self._logout(); return
         target=proxy_target(self.config,path)
@@ -144,10 +149,18 @@ def main():
     if args.host: config=ShellConfig(**{**config.__dict__,"host":args.host})
     if args.port: config=ShellConfig(**{**config.__dict__,"port":args.port})
     if not config.admin_password: raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
-    ShellHandler.config=config; ShellHandler.auth=AuthManager(config.admin_username,config.admin_password,session_seconds=config.session_hours*3600); ShellHandler.autotests=AutonomousTestManager(config); ShellHandler.curiosity=CuriosityEngine(config); ShellHandler.curiosity.start()
-    server=ThreadingHTTPServer((config.host,config.port),ShellHandler); print(f"Memoria.ia Server: http://{config.host}:{config.port}"); print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine")
+    ShellHandler.config=config
+    ShellHandler.auth=AuthManager(config.admin_username,config.admin_password,session_seconds=config.session_hours*3600)
+    ShellHandler.autotests=AutonomousTestManager(config)
+    ShellHandler.curiosity=CuriosityEngine(config)
+    ShellHandler.knowledge=ServerKnowledge(str(Path(config.curiosity_data_dir).parent / "knowledge"))
+    learner=LearningWorker(ShellHandler.knowledge, config.curiosity_data_dir)
+    ShellHandler.curiosity.start(); learner.start()
+    server=ThreadingHTTPServer((config.host,config.port),ShellHandler)
+    print(f"Memoria.ia Server: http://{config.host}:{config.port}")
+    print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge")
     try: server.serve_forever()
     except KeyboardInterrupt: pass
-    finally: ShellHandler.curiosity.stop(); server.server_close()
+    finally: learner.stop(); ShellHandler.curiosity.stop(); server.server_close()
 
 if __name__ == "__main__": main()
