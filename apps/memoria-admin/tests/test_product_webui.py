@@ -46,6 +46,7 @@ def test_server_admin_chat_keeps_bdr_history_contract_in_static_assets():
     static = Path(__file__).resolve().parents[1] / "static"
     html = (static / "index.html").read_text(encoding="utf-8")
     js = (static / "app.js").read_text(encoding="utf-8")
+    direct_js = (static / "history-fix.js").read_text(encoding="utf-8")
     css = (static / "style.css").read_text(encoding="utf-8")
 
     assert 'id="conversationHistory"' in html
@@ -55,3 +56,10 @@ def test_server_admin_chat_keeps_bdr_history_contract_in_static_assets():
     assert "loadConversationHistory" in js
     assert ".history-panel" in css
     assert ".history-item.active" in css
+
+    assert 'id="chatAnswerMode"' in html
+    assert "Memoria direta · sem LLM" in html
+    assert "/api/v1/conversation/ingest" in direct_js
+    assert "/api/v1/conversation/resolve" in direct_js
+    assert "direct-no-llm" in direct_js
+    assert "questions are never written back as facts" in direct_js
