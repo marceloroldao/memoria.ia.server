@@ -17,7 +17,8 @@ from urllib.parse import quote_plus, urlparse
 from urllib.request import Request, urlopen
 
 from search_probe import SearchProbe
-from search_providers import SearchProviderError, wikipedia_results
+from search_providers import wikipedia_results
+from web_walker import WebWalker
 
 PREFIX = "/api/server/v1/curiosity"
 SEEDS = [
@@ -103,6 +104,7 @@ class CuriosityEngine:
         self.state_file=self.data_dir/"state.json"; self.events_file=self.data_dir/"events.jsonl"
         self._lock=Lock(); self._wake=Event(); self._stop=Event(); self._events=deque(maxlen=500)
         self._seen_urls=set(); self._known_terms=set(); self._rng=random.Random(config.curiosity_seed or None)
+        self.walker=WebWalker(self._rng)
         self.state=self._load_state(); self.state.enabled=config.curiosity_enabled
         self.data_dir.mkdir(parents=True, exist_ok=True); self._load_recent_events()
         self._thread=Thread(target=self._loop, daemon=True, name="curiosity-engine")
@@ -116,7 +118,8 @@ class CuriosityEngine:
         try:
             for line in self.events_file.read_text(encoding="utf-8").splitlines()[-500:]:
                 event=json.loads(line); self._events.append(event)
-                if event.get("url"): self._seen_urls.add(str(event["url"]))
+                if event.get("url"):
+                    url=str(event["url"]); self._seen_urls.add(url); self.walker.seen.add(url)
                 for term in event.get("terms",[]) or []: self._known_terms.add(str(term))
         except Exception: pass
     def _save_state(self):
@@ -137,7 +140,7 @@ class CuriosityEngine:
         if not self._budget(): raise RuntimeError("hourly request budget reached")
         accept = "application/json,text/plain;q=0.9,*/*;q=0.1" if accept_json else "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1"
         req=Request(url,headers={
-            "User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152.0 Safari/537.36 MemoriaIA-Curiosity/2.0",
+            "User-Agent":"MemoriaIA-Curiosity/2.1 (+bounded-public-web-research)",
             "Accept":accept,
             "Accept-Language":"pt-BR,pt;q=0.9,en;q=0.7",
         })
@@ -170,6 +173,7 @@ class CuriosityEngine:
         providers = [
             ("duckduckgo", self._search_duckduckgo),
             ("wikipedia", lambda q: wikipedia_results(q, self._get, self.config.curiosity_results_per_search)),
+            ("web_walker", lambda q: self.walker.next_candidates(self.config.curiosity_results_per_search)),
         ]
         for name, provider in providers:
             try:
@@ -180,7 +184,9 @@ class CuriosityEngine:
             if results:
                 self.state.last_provider=name
                 if name != "duckduckgo":
-                    self._event("search_results",f"{name} retornou {len(results)} resultado(s).",topic=topic,provider=name,results=len(results))
+                    label="Web Walker" if name == "web_walker" else name
+                    self._event("search_results",f"{label} retornou {len(results)} caminho(s).",topic=topic,provider=name,results=len(results))
+                for title,url in results: self.walker.offer(title,url)
                 return results
             self._event("provider_fallback",f"Sem resultados em {name}; tentando próxima fonte.",topic=topic,provider=name)
         self.state.last_provider=None
@@ -189,8 +195,10 @@ class CuriosityEngine:
     def _read(self, url: str) -> dict[str,object]:
         html,_=self._get(url); parser=PageHTML(); parser.feed(html); text=parser.text[:self.config.curiosity_text_limit]; counts={}
         for w in _words(parser.title+" "+parser.description+" "+text): counts[w]=counts.get(w,0)+1
-        terms=[w for w,n in sorted(counts.items(),key=lambda x:(-x[1],x[0])) if n>=2][:12]; self.state.pages_read += 1
-        return {"url":url,"domain":urlparse(url).netloc,"title":parser.title[:300],"description":parser.description[:1000],"excerpt":text[:1800],"terms":terms}
+        terms=[w for w,n in sorted(counts.items(),key=lambda x:(-x[1],x[0])) if n>=2][:12]
+        offered=self.walker.offer_page_links(url,html,max_links=16)
+        self.state.pages_read += 1
+        return {"url":url,"domain":urlparse(url).netloc,"title":parser.title[:300],"description":parser.description[:1000],"excerpt":text[:1800],"terms":terms,"links_offered":offered}
     def _choose_topic(self) -> tuple[str,str]:
         trajectory=self.state.trajectory[-12:]; force=self.state.stagnation >= self.config.curiosity_stagnation_limit
         jump=force or not self.state.current_topic or self._rng.random() < self.config.curiosity_random_jump_rate
@@ -212,6 +220,8 @@ class CuriosityEngine:
             try:
                 page=self._read(url); terms=list(page["terms"]); novelty=len([t for t in terms if t not in self._known_terms])/max(1,len(terms)); self._known_terms.update(terms)
                 page.update({"kind":"evidence","message":str(page["title"] or title),"topic":topic,"novelty":round(novelty,3),"epistemic_status":"web_observation","confidence":0.25,"provider":self.state.last_provider}); self._event(**page); discoveries += int(novelty >= self.config.curiosity_novelty_threshold)
+                if page.get("links_offered"):
+                    self._event("web_walk_frontier",f"Adicionados {page['links_offered']} links à trilha de navegação.",topic=topic,url=url,provider=self.state.last_provider,frontier=len(self.walker.frontier))
                 if discoveries: break
             except Exception as exc: self.state.errors += 1; self._event("page_error",str(exc),url=url,topic=topic,provider=self.state.last_provider)
         if discoveries: self.state.discoveries += discoveries; self.state.stagnation=0
@@ -228,7 +238,7 @@ class CuriosityEngine:
     def snapshot(self, after: int=0) -> dict[str,object]:
         with self._lock: events=list(self._events)
         if after>0: events=events[after:]
-        return {"schema":"memoria-curiosity/v2","state":asdict(self.state),"configuration":{"interval_seconds":self.config.curiosity_interval_seconds,"max_requests_hour":self.config.curiosity_max_requests_hour,"random_jump_rate":self.config.curiosity_random_jump_rate,"stagnation_limit":self.config.curiosity_stagnation_limit,"web_enabled":True,"providers":["duckduckgo","wikipedia"]},"events":events,"event_count":len(self._events)}
+        return {"schema":"memoria-curiosity/v2","state":asdict(self.state),"configuration":{"interval_seconds":self.config.curiosity_interval_seconds,"max_requests_hour":self.config.curiosity_max_requests_hour,"random_jump_rate":self.config.curiosity_random_jump_rate,"stagnation_limit":self.config.curiosity_stagnation_limit,"web_enabled":True,"providers":["duckduckgo","wikipedia","web_walker"],"walker_frontier":len(self.walker.frontier)},"events":events,"event_count":len(self._events)}
     def action(self, action: str):
         if action == "pause": self.state.enabled=False; self.state.status="paused"
         elif action == "resume": self.state.enabled=True; self.state.status="running"; self._wake.set()
