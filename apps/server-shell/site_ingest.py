@@ -13,6 +13,7 @@ import json
 from threading import Lock, Thread
 from urllib.parse import urldefrag, urljoin, urlparse
 
+from curiosity_engine import PageHTML, _words
 
 PREFIX = "/api/server/v1/site-ingest"
 
@@ -81,6 +82,25 @@ class SiteIngestManager:
             if job_id in self._jobs:
                 self._jobs[job_id].update(fields)
 
+    def _page_from_html(self, url: str, html: str) -> dict[str, object]:
+        parser = PageHTML()
+        parser.feed(html)
+        text = parser.text[:self.curiosity.config.curiosity_text_limit]
+        counts: dict[str, int] = {}
+        for word in _words(parser.title + " " + parser.description + " " + text):
+            counts[word] = counts.get(word, 0) + 1
+        terms = [word for word, count in sorted(counts.items(), key=lambda x: (-x[1], x[0])) if count >= 2][:12]
+        self.curiosity.state.pages_read += 1
+        return {
+            "url": url,
+            "domain": urlparse(url).netloc,
+            "title": parser.title[:300],
+            "description": parser.description[:1000],
+            "excerpt": text[:1800],
+            "terms": terms,
+            "links_offered": 0,
+        }
+
     def _run(self, job_id: str, root_url: str) -> None:
         root_host = (urlparse(root_url).hostname or "").casefold()
         queue = deque([(root_url, 0)])
@@ -99,7 +119,7 @@ class SiteIngestManager:
                 seen.add(url)
                 try:
                     html, _ctype = self.curiosity._get(url)
-                    page = self.curiosity._read(url)
+                    page = self._page_from_html(url, html)
                     page.update({
                         "kind": "evidence",
                         "message": str(page.get("title") or url),
