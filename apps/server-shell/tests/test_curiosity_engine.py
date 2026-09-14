@@ -31,6 +31,7 @@ def test_stagnation_forces_jump(tmp_path):
 def test_cycle_records_web_observation_without_promoting_to_personal_memory(tmp_path):
     engine = CuriosityEngine(config(tmp_path))
     engine._search = lambda topic: [("Example", "https://example.test/page")]
+    engine.state.last_provider = "wikipedia"
     engine._read = lambda url: {
         "url": url, "domain": "example.test", "title": "Nova bateria experimental",
         "description": "evidência web", "excerpt": "bateria bateria sólida sólida",
@@ -42,6 +43,7 @@ def test_cycle_records_web_observation_without_promoting_to_personal_memory(tmp_
     assert evidence
     assert evidence[-1]["epistemic_status"] == "web_observation"
     assert evidence[-1]["confidence"] == 0.25
+    assert evidence[-1]["provider"] == "wikipedia"
     assert engine.state.discoveries == 1
     assert (tmp_path / "events.jsonl").exists()
     assert (tmp_path / "state.json").exists()
@@ -56,3 +58,17 @@ def test_pause_resume_and_manual_jump_are_observable(tmp_path):
     engine.action("jump")
     assert engine.state.stagnation == 2
     assert any(e["kind"] == "control" for e in engine.snapshot()["events"])
+
+
+def test_search_falls_back_when_primary_provider_returns_nothing(tmp_path, monkeypatch):
+    engine = CuriosityEngine(config(tmp_path))
+    monkeypatch.setattr(engine, "_search_duckduckgo", lambda topic: [])
+
+    def fake_wikipedia(topic, fetch_text, limit):
+        return [("Robótica", "https://pt.wikipedia.org/wiki/Rob%C3%B3tica")]
+
+    monkeypatch.setattr("curiosity_engine.wikipedia_results", fake_wikipedia)
+    results = engine._search("robótica")
+    assert results
+    assert engine.state.last_provider == "wikipedia"
+    assert any(e["kind"] == "provider_fallback" for e in engine.snapshot()["events"])
