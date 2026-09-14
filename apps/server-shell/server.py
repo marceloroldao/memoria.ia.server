@@ -9,6 +9,7 @@ import json
 import mimetypes
 from pathlib import Path
 import socket
+from threading import Lock
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
@@ -56,6 +57,7 @@ def static_target(path: str) -> Path | None:
 
 class ShellHandler(BaseHTTPRequestHandler):
     config = ShellConfig(); auth: AuthManager; autotests: AutonomousTestManager; curiosity: CuriosityEngine; knowledge: ServerKnowledge; site_ingest: SiteIngestManager
+    episode_write_lock = Lock()
     def _session_token(self):
         raw=self.headers.get("Cookie")
         if not raw: return None
@@ -91,6 +93,9 @@ class ShellHandler(BaseHTTPRequestHandler):
         if base_url == self.config.memoria_api_url and self.config.memoria_api_key: headers["X-Memoria-Key"]=self.config.memoria_api_key
         if base_url == self.config.model_gateway_url and self.config.model_gateway_key: headers["X-Model-Gateway-Key"]=self.config.model_gateway_key
         request=Request(url,data=body if body else None,headers=headers,method=self.command)
+        serialized_episode_write = base_url == self.config.memoria_api_url and upstream_path == "/api/v1/episodes" and self.command == "POST"
+        if serialized_episode_write:
+            self.episode_write_lock.acquire()
         try:
             with urlopen(request,timeout=self.config.proxy_timeout_seconds) as response:
                 payload=response.read(); self.send_response(response.status)
@@ -102,6 +107,9 @@ class ShellHandler(BaseHTTPRequestHandler):
             payload=error.read(); self.send_response(error.code); self.send_header("Content-Type",error.headers.get("Content-Type","application/json; charset=utf-8")); self.send_header("Content-Length",str(len(payload))); self.end_headers();
             if self.command != "HEAD": self.wfile.write(payload)
         except (URLError,socket.timeout,TimeoutError): self._write_json(502,{"error":"upstream_unavailable"})
+        finally:
+            if serialized_episode_write:
+                self.episode_write_lock.release()
     def _login(self):
         if self.command != "POST": self._write_json(405,{"error":"method_not_allowed"},{"Allow":"POST"}); return
         body=self._read_body()
@@ -158,7 +166,7 @@ def main():
     ShellHandler.curiosity=CuriosityEngine(config)
     ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity, max_pages=200, max_depth=5)
     ShellHandler.knowledge=ServerKnowledge(str(Path(config.curiosity_data_dir).parent / "knowledge"))
-    knowledge_bdr=KnowledgeBDR(config.memoria_api_url, config.memoria_api_key, timeout=min(config.proxy_timeout_seconds, 15.0))
+    knowledge_bdr=KnowledgeBDR(config.memoria_api_url, config.memoria_api_key, timeout=min(config.proxy_timeout_seconds, 15.0), write_lock=ShellHandler.episode_write_lock)
     learner=LearningWorker(ShellHandler.knowledge, config.curiosity_data_dir, bdr=knowledge_bdr)
     ShellHandler.curiosity.start(); learner.start()
     server=ThreadingHTTPServer((config.host,config.port),ShellHandler)
