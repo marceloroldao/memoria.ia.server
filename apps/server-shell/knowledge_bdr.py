@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -37,7 +38,10 @@ class KnowledgeBDR:
         episode_id = f"knowledge:{digest}"
         payload = {
             "episode_id": episode_id,
-            "role": "system",
+            # Episodic API accepts only user|assistant. This is machine-produced
+            # evidence, therefore assistant is the valid transport role; semantic
+            # origin remains explicit in event_type/topics/text provenance.
+            "role": "assistant",
             "text": canonical,
             "session_id": self.SESSION_ID,
             "order": int(datetime.now(timezone.utc).timestamp() * 1000),
@@ -54,11 +58,11 @@ class KnowledgeBDR:
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 response.read()
-        except Exception as exc:
-            # Duplicate episode ids are safe to ignore if the upstream rejects them.
-            message = str(exc)
-            if "409" not in message and "already" not in message.casefold() and "duplicate" not in message.casefold():
-                raise
+        except HTTPError as exc:
+            if exc.code == 409:
+                return episode_id
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"BDR episode store failed HTTP {exc.code}: {detail}") from exc
         return episode_id
 
     def load_evidence(self, limit: int = 5000) -> list[dict[str, object]]:
