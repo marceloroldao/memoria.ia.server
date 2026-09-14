@@ -34,6 +34,17 @@
       .toLowerCase();
   }
 
+  function extractSingleUrl(text) {
+    const value = String(text || '').trim();
+    if (!/^https?:\/\/\S+$/i.test(value)) return null;
+    try {
+      const u = new URL(value);
+      return ['http:', 'https:'].includes(u.protocol) ? u.href : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function looksLikeQuestion(text) {
     const value = normalized(text);
     if (!value) return false;
@@ -93,12 +104,25 @@
     return hit ? {reply: formatKnowledgeHit(hit), hit} : null;
   }
 
+  async function startSiteIngest(url) {
+    const result = await api('/api/server/v1/site-ingest', {
+      method: 'POST',
+      body: JSON.stringify({url})
+    });
+    const reply = `Leitura do site iniciada sem LLM. Vou percorrer a página enviada e os links internos do mesmo site, registrando cada página como evidência no BDR. Limites atuais: até ${result.max_pages || 200} páginas e profundidade ${result.max_depth ?? 5}. Job: ${result.job_id}.`;
+    bubble(reply, 'assistant', 'Memoria.ia · leitura de site');
+    await persistEpisodeOnly('assistant', reply).catch(() => {});
+    showMetrics({mode:'direct-no-llm',operation:'site-ingest',status:result.status,job_id:result.job_id,input_tokens:0,output_tokens:0});
+    log('site_ingest_started', {url, job_id:result.job_id});
+  }
+
   async function directMemorySend() {
     const text = message.value.trim();
     if (!text) return;
 
     bubble(text, 'user');
     message.value = '';
+    const siteUrl = extractSingleUrl(text);
     const question = looksLikeQuestion(text) || asksLearnedSummary(text);
 
     try {
@@ -109,7 +133,9 @@
     }
 
     try {
-      if (!question) {
+      if (siteUrl) {
+        await startSiteIngest(siteUrl);
+      } else if (!question) {
         const ingested = await api('/api/v1/conversation/ingest', {
           method: 'POST',
           body: JSON.stringify({
