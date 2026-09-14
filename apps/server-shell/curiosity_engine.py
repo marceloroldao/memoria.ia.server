@@ -13,8 +13,10 @@ import random
 import re
 import socket
 from threading import Event, Lock, Thread
-from urllib.parse import parse_qs, quote_plus, unquote, urlparse, urlsplit
+from urllib.parse import quote_plus, urlparse
 from urllib.request import Request, urlopen
+
+from search_probe import SearchProbe
 
 PREFIX = "/api/server/v1/curiosity"
 SEEDS = [
@@ -50,26 +52,6 @@ def _assert_external_url(url: str) -> None:
         raise ValueError("hostname resolution failed") from exc
 
 
-class SearchHTML(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(); self.links: list[tuple[str,str]] = []; self._href=""; self._capture=False; self._text=[]
-    def handle_starttag(self, tag, attrs):
-        a=dict(attrs)
-        if tag == "a" and "result__a" in a.get("class", ""):
-            self._href=a.get("href", ""); self._capture=True; self._text=[]
-    def handle_data(self, data):
-        if self._capture: self._text.append(data)
-    def handle_endtag(self, tag):
-        if tag == "a" and self._capture:
-            href=self._href
-            if "uddg=" in href:
-                try: href=unquote((parse_qs(urlsplit(href).query).get("uddg") or [href])[0])
-                except Exception: pass
-            title=" ".join("".join(self._text).split())
-            if href.startswith("http") and title: self.links.append((title,href))
-            self._capture=False
-
-
 class PageHTML(HTMLParser):
     def __init__(self) -> None:
         super().__init__(); self.title=""; self.description=""; self._in_title=False; self._skip=0; self._text=[]
@@ -77,7 +59,7 @@ class PageHTML(HTMLParser):
         a=dict(attrs); tag=tag.lower()
         if tag in {"script","style","noscript","svg"}: self._skip += 1
         elif tag == "title": self._in_title=True
-        elif tag == "meta" and a.get("name","").lower() in {"description","og:description"}:
+        elif tag == "meta" and (a.get("name","").lower() == "description" or a.get("property","").lower() == "og:description"):
             self.description=a.get("content","")[:1000]
     def handle_endtag(self, tag):
         tag=tag.lower()
@@ -151,7 +133,11 @@ class CuriosityEngine:
     def _get(self, url: str, max_bytes: int | None=None) -> tuple[str,str]:
         _assert_external_url(url)
         if not self._budget(): raise RuntimeError("hourly request budget reached")
-        req=Request(url,headers={"User-Agent":"MemoriaIA-Curiosity/2.0 (+research worker)"})
+        req=Request(url,headers={
+            "User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/152.0 Safari/537.36 MemoriaIA-Curiosity/2.0",
+            "Accept":"text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+            "Accept-Language":"pt-BR,pt;q=0.9,en;q=0.7",
+        })
         with urlopen(req,timeout=self.config.curiosity_http_timeout) as r:
             final_url=r.geturl()
             if final_url != url: _assert_external_url(final_url)
@@ -161,8 +147,20 @@ class CuriosityEngine:
             return data.decode("utf-8",errors="replace"), ctype
     def _search(self, topic: str) -> list[tuple[str,str]]:
         endpoint=self.config.curiosity_search_url.replace("{query}",quote_plus(topic)).replace("QUERY",quote_plus(topic))
-        html,_=self._get(endpoint,750_000); parser=SearchHTML(); parser.feed(html); self.state.searches += 1
-        return parser.links[:self.config.curiosity_results_per_search]
+        html,_=self._get(endpoint,750_000)
+        parser=SearchProbe(); parser.feed(html); self.state.searches += 1
+        dedup=[]; seen=set()
+        for title,url in parser.links:
+            domain=urlparse(url).netloc.casefold()
+            if not domain or "duckduckgo.com" in domain or url in seen: continue
+            seen.add(url); dedup.append((title,url))
+        results=dedup[:self.config.curiosity_results_per_search]
+        if results:
+            self._event("search_results",f"Busca retornou {len(results)} resultado(s).",topic=topic,results=len(results))
+        else:
+            challenge=("captcha" in html.casefold() or "verify you are human" in html.casefold() or "anomaly" in html.casefold())
+            self._event("search_empty","Busca retornou zero links utilizáveis.",topic=topic,challenge_detected=challenge,response_bytes=len(html))
+        return results
     def _read(self, url: str) -> dict[str,object]:
         html,_=self._get(url); parser=PageHTML(); parser.feed(html); text=parser.text[:self.config.curiosity_text_limit]; counts={}
         for w in _words(parser.title+" "+parser.description+" "+text): counts[w]=counts.get(w,0)+1
