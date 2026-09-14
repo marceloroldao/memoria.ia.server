@@ -41,6 +41,12 @@
     return /^(qual|quais|quem|onde|quando|como|porque|por que|o que|que |quanto|quantos|quantas|me diga|lembra|lembre)/.test(value);
   }
 
+  function asksLearnedSummary(text) {
+    const value = normalized(text);
+    return (value.includes('aprendeu') || value.includes('aprendendo') || value.includes('descobriu') || value.includes('descobertas'))
+      && (value.includes('hoje') || value.includes('ultim') || value.includes('recent'));
+  }
+
   async function persistEpisodeOnly(role, text) {
     const order = nextChatOrder();
     const timestamp = new Date().toISOString();
@@ -60,13 +66,40 @@
     });
   }
 
+  function formatKnowledgeHit(hit) {
+    const src = Array.isArray(hit.sources) && hit.sources.length ? hit.sources[0] : null;
+    const provider = src?.provider || Object.keys(hit.providers || {})[0] || 'server';
+    const sourceLine = src?.title ? `\nFonte: ${provider} · ${src.title}` : `\nFonte: ${provider}`;
+    const confidence = typeof hit.confidence === 'number' ? `${Math.round(hit.confidence * 100)}%` : 'n/d';
+    const related = Array.isArray(hit.related) && hit.related.length
+      ? `\nRelacionado: ${hit.related.slice(0, 5).map(x => x[0]).join(', ')}`
+      : '';
+    return `${hit.excerpt || hit.label}\n\nConhecimento adquirido pelo servidor\nConfiança: ${confidence}\nObservações: ${hit.observations}${sourceLine}${related}`;
+  }
+
+  async function resolveServerKnowledge(text) {
+    if (asksLearnedSummary(text)) {
+      const recent = await api('/api/server/v1/knowledge/recent');
+      const items = Array.isArray(recent.items) ? recent.items.slice(0, 8) : [];
+      if (!items.length) return null;
+      const lines = items.map(item => `• ${item.label} — ${Math.round((item.confidence || 0) * 100)}% · ${item.observations} observação(ões)`);
+      return {
+        reply: `O servidor já consolidou ${recent.concepts || items.length} conceito(s) a partir de ${recent.observations || 0} observação(ões).\n\nMais recentes:\n${lines.join('\n')}`,
+        hit: items[0]
+      };
+    }
+    const result = await api(`/api/server/v1/knowledge/query?q=${encodeURIComponent(text)}`);
+    const hit = Array.isArray(result.hits) && result.hits.length ? result.hits[0] : null;
+    return hit ? {reply: formatKnowledgeHit(hit), hit} : null;
+  }
+
   async function directMemorySend() {
     const text = message.value.trim();
     if (!text) return;
 
     bubble(text, 'user');
     message.value = '';
-    const question = looksLikeQuestion(text);
+    const question = looksLikeQuestion(text) || asksLearnedSummary(text);
 
     try {
       await persistEpisodeOnly('user', text);
@@ -92,39 +125,36 @@
           : 'Registrado sem LLM. Nenhuma relação explícita foi extraída desta entrada.';
         bubble(reply, 'assistant', 'Memoria.ia · direta');
         await persistEpisodeOnly('assistant', reply).catch(() => {});
-        showMetrics({
-          mode: 'direct-no-llm',
-          operation: 'ingest',
-          relations: relations.length,
-          input_tokens: 0,
-          output_tokens: 0
-        });
+        showMetrics({mode:'direct-no-llm',operation:'ingest',relations:relations.length,input_tokens:0,output_tokens:0});
         log('direct_chat_ingest', {relations: relations.length, session_id: profileSession});
       } else {
         const resolved = await api('/api/v1/conversation/resolve', {
           method: 'POST',
           body: JSON.stringify({query: text, session_id: profileSession})
         });
-        const hit = String(resolved.status || '').toUpperCase() === 'HIT';
-        const selected = resolved.selected_context;
-        const reply = hit && selected
-          ? String(selected)
-          : 'Relação não encontrada.';
-        bubble(reply, hit ? 'assistant' : 'system', hit ? 'Memoria.ia · colapso' : 'Memoria.ia · sem HIT');
-        await persistEpisodeOnly('assistant', reply).catch(() => {});
-        showMetrics({
-          mode: 'direct-no-llm',
-          operation: 'resolve',
-          status: resolved.status || 'MISS',
-          confidence: resolved.confidence ?? resolved.score ?? null,
-          input_tokens: 0,
-          output_tokens: 0
-        });
-        log('direct_chat_resolve', {
-          status: resolved.status,
-          session_id: profileSession,
-          selected_context: selected || null
-        });
+        const personalHit = String(resolved.status || '').toUpperCase() === 'HIT' && resolved.selected_context;
+        if (personalHit) {
+          const reply = String(resolved.selected_context);
+          bubble(reply, 'assistant', 'Memoria.ia · memória pessoal');
+          await persistEpisodeOnly('assistant', reply).catch(() => {});
+          showMetrics({mode:'direct-no-llm',operation:'resolve-personal',status:resolved.status,confidence:resolved.confidence ?? resolved.score ?? null,input_tokens:0,output_tokens:0});
+          log('direct_chat_resolve', {status: resolved.status, space:'personal', session_id:profileSession});
+        } else {
+          const learned = await resolveServerKnowledge(text).catch(error => {
+            log('server_knowledge_query_error', {error:error.message}); return null;
+          });
+          if (learned) {
+            bubble(learned.reply, 'assistant', 'Memoria.ia · Server Knowledge');
+            await persistEpisodeOnly('assistant', learned.reply).catch(() => {});
+            showMetrics({mode:'direct-no-llm',operation:'resolve-server-knowledge',status:'HIT',confidence:learned.hit?.confidence ?? null,observations:learned.hit?.observations ?? null,input_tokens:0,output_tokens:0});
+            log('direct_chat_resolve', {status:'HIT',space:'server-knowledge',key:learned.hit?.key || null});
+          } else {
+            const reply = 'Relação não encontrada nem na memória pessoal nem no conhecimento adquirido pelo servidor.';
+            bubble(reply, 'system', 'Memoria.ia · sem HIT');
+            await persistEpisodeOnly('assistant', reply).catch(() => {});
+            showMetrics({mode:'direct-no-llm',operation:'resolve',status:'MISS',input_tokens:0,output_tokens:0});
+          }
+        }
       }
       await window.loadConversationHistory?.();
     } catch (error) {
@@ -133,21 +163,14 @@
     }
   }
 
-  // Replace only the click action. The Enter handler from app.js still calls this button,
-  // therefore both mouse and keyboard follow the selected mode.
   send.onclick = async () => {
     if (answerMode?.value === 'direct') {
       await directMemorySend();
       return;
     }
-    if (typeof originalSend === 'function') {
-      return originalSend.call(send);
-    }
+    if (typeof originalSend === 'function') return originalSend.call(send);
   };
 
-  // In LLM mode, preserve the cross-conversation promotion. In direct mode the
-  // direct handler decides whether the input is an assertion (ingest) or intent
-  // query (resolve), so questions are never written back as facts.
   send.addEventListener('click', () => {
     if (answerMode?.value === 'direct') return;
     const text = message.value.trim();
@@ -155,23 +178,14 @@
     const signature = `${text}\u0000${Date.now() >> 10}`;
     if (signature === lastPromotion) return;
     lastPromotion = signature;
-
     fetch('/api/v1/conversation/ingest', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        role: 'user',
-        text,
-        session_id: profileSession,
-        timestamp: new Date().toISOString()
-      })
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({role:'user',text,session_id:profileSession,timestamp:new Date().toISOString()})
     }).then(async response => {
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
+        const body=await response.json().catch(() => ({}));
         throw new Error(body.detail || body.error || `${response.status} ${response.statusText}`);
       }
-    }).catch(error => {
-      console.warn('[memoria] profile promotion failed:', error.message);
-    });
+    }).catch(error => console.warn('[memoria] profile promotion failed:', error.message));
   }, true);
 })();
