@@ -38,7 +38,7 @@ class ShellConfig:
     curiosity_text_limit: int = 20_000
     curiosity_novelty_threshold: float = 0.25
     curiosity_seed: int = 0
-    curiosity_search_url: str = "https://html.duckduckgo.com/html/?q={query}"
+    curiosity_search_url: str = "https://html.duckduckgo.com/html/?q=QUERY"
 
     @classmethod
     def from_env(cls) -> "ShellConfig":
