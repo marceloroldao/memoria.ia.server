@@ -47,13 +47,14 @@ def test_related_terms_are_formed_from_same_observation(tmp_path):
     assert "motor" in related
 
 
-def test_wikipedia_navigation_noise_is_filtered(tmp_path):
+def test_wikipedia_navigation_terms_remain_addressed_but_low_weight(tmp_path):
     knowledge = ServerKnowledge(str(tmp_path / "knowledge"))
     result = knowledge.learn_from_evidence(evidence(terms=["bldc", "motor", "editar", "página", "barra", "código"]))
-    assert result["learned"] == 2
-    assert result["filtered"] == 4
-    assert not knowledge.query("editar")["hits"]
-    assert knowledge.query("BLDC")["hits"]
+    assert result["addressed"] == 6
+    editar = knowledge.query("editar")["hits"][0]
+    bldc = knowledge.query("BLDC")["hits"][0]
+    assert editar["semantic_class"] == "interface_noise"
+    assert editar["semantic_weight"] < bldc["semantic_weight"]
 
 
 class FakeBDR:
@@ -102,5 +103,6 @@ def test_recent_reports_server_learning_state(tmp_path):
     recent = knowledge.recent()
     assert recent["concepts"] == 4
     assert recent["observations"] == 1
-    assert recent["storage"] == "bdr+journal/cache"
+    assert recent["storage"] == "bdr-canonical/cache"
+    assert recent["principle"] == "address_first_weight_later"
     assert recent["items"]
