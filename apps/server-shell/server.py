@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 from auth import AuthManager
 from autonomous_tests import AutonomousTestManager
 from config import ShellConfig
-from curiosity_engine import CuriosityEngine
+from guided_curiosity import TrajectoryGuidedCuriosityEngine
 from epistemic_feedback import EpistemicFeedback
 from epistemic_trajectory import EpistemicTrajectoryStore
 from growth_diagnostics import GrowthDiagnostics
@@ -33,7 +33,7 @@ def proxy_target(c,path):
 def static_target(path):
     r={"/":SHELL_STATIC/"index.html","/index.html":SHELL_STATIC/"index.html","/shell.css":SHELL_STATIC/"shell.css","/shell.js":SHELL_STATIC/"shell.js","/login":SHELL_STATIC/"login.html","/login.css":SHELL_STATIC/"login.css","/login.js":SHELL_STATIC/"login.js","/admin/memoria":MEMORIA_STATIC/"index.html","/admin/memoria/":MEMORIA_STATIC/"index.html","/admin/memoria/style.css":MEMORIA_STATIC/"style.css","/admin/memoria/app.js":MEMORIA_STATIC/"app.js","/admin/memoria/history-fix.js":MEMORIA_STATIC/"history-fix.js","/admin/memoria/curiosity-admin.js":MEMORIA_STATIC/"curiosity-admin.js","/admin/memoria/growth-diagnostics.js":MEMORIA_STATIC/"growth-diagnostics.js","/explorer/bdr":BDR_STATIC/"index.html","/explorer/bdr/":BDR_STATIC/"index.html","/explorer/bdr/styles.css":BDR_STATIC/"styles.css","/explorer/bdr/app.js":BDR_STATIC/"app.js"}; return r.get(path)
 class ShellHandler(BaseHTTPRequestHandler):
-    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:CuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore
+    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore
     episode_write_lock=Lock()
     def _session_token(self):
         raw=self.headers.get("Cookie")
@@ -132,7 +132,7 @@ def main():
     if a.host:c=ShellConfig(**{**c.__dict__,"host":a.host})
     if a.port:c=ShellConfig(**{**c.__dict__,"port":a.port})
     if not c.admin_password:raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
-    ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.curiosity=CuriosityEngine(c,ShellHandler.knowledge);ShellHandler.trajectories=EpistemicTrajectoryStore(str(Path(c.curiosity_data_dir)/"trajectories"));ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
+    ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.trajectories=EpistemicTrajectoryStore(str(Path(c.curiosity_data_dir)/"trajectories"));ShellHandler.curiosity=TrajectoryGuidedCuriosityEngine(c,ShellHandler.knowledge,ShellHandler.trajectories);ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
     kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir,trajectories=ShellHandler.trajectories);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback + Epistemic Trajectories")
     try:server.serve_forever()
     except KeyboardInterrupt:pass
