@@ -1,5 +1,5 @@
 from pathlib import Path
-import sys
+import json, sys
 SHELL=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(SHELL))
 from epistemic_trajectory import EpistemicTrajectoryStore
 
@@ -32,3 +32,20 @@ def test_negative_recent_gain_blocks_saturation(tmp_path):
     s.record_feedback("fisica",{"key":"fisica","gain":-.1,"after":.25,"decision":"investigate_deeper"},{"provider":"b"})
     item=s.record_feedback("fisica",{"key":"fisica","gain":.1,"after":.2,"decision":"reinforce_or_expand"},{"provider":"b"})
     assert not item["saturation"]["saturated"]; assert not item["saturation"]["no_recent_contradiction"]
+
+def test_closed_trajectory_reopens_as_linked_generation(tmp_path):
+    s=EpistemicTrajectoryStore(str(tmp_path)); first=s.open("materia",{"key":"materia"}); s.close("materia","evidence_saturated")
+    second=s.open("materia",{"key":"materia","epistemic_need":.7},"new_evidence_after_closure")
+    assert second["trajectory_id"]!=first["trajectory_id"]; assert second["parent_trajectory_id"]==first["trajectory_id"]; assert second["root_trajectory_id"]==first["trajectory_id"]; assert second["generation"]==1; assert s.snapshot()["stats"]["reopened"]==1
+
+def test_reopening_lineage_survives_restart_and_multiple_generations(tmp_path):
+    s=EpistemicTrajectoryStore(str(tmp_path)); first=s.open("tempo",{"key":"tempo"}); s.close("tempo")
+    second=s.open("tempo",{"key":"tempo"}); s.close("tempo")
+    r=EpistemicTrajectoryStore(str(tmp_path)); third=r.open("tempo",{"key":"tempo"})
+    assert third["parent_trajectory_id"]==second["trajectory_id"]; assert third["root_trajectory_id"]==first["trajectory_id"]; assert third["generation"]==2; assert r.snapshot()["stats"]["reopened"]==2
+
+def test_old_state_is_migrated_without_losing_closed_history(tmp_path):
+    state={"version":1,"active":{},"closed":{"old":{"trajectory_id":"old","key":"luz","status":"closed","closed_at":1}},"stats":{"opened":1,"closed":1,"steps":0,"positive_gain":0,"zero_gain":0,"negative_gain":0}}
+    (tmp_path/"epistemic_trajectories.state.json").write_text(json.dumps(state),encoding="utf-8")
+    s=EpistemicTrajectoryStore(str(tmp_path)); reopened=s.open("luz",{"key":"luz"})
+    assert s.snapshot()["version"]==2; assert reopened["parent_trajectory_id"]=="old"; assert reopened["generation"]==1; assert s.snapshot()["closed_count"]==1
