@@ -19,6 +19,7 @@ def config(tmp_path):
     return SimpleNamespace(
         curiosity_data_dir=str(tmp_path), curiosity_enabled=True, curiosity_seed=7,
         curiosity_stagnation_limit=3, curiosity_random_jump_rate=0.0,
+        curiosity_interval_seconds=60,
         curiosity_max_requests_hour=100, curiosity_http_timeout=1,
         curiosity_max_page_bytes=1000, curiosity_search_url="https://example.invalid/?q={query}",
         curiosity_results_per_search=5, curiosity_text_limit=1000,
