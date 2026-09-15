@@ -20,16 +20,27 @@ class EpistemicTrajectoryStore:
         with self._lock:
             key=str((target or {}).get("key") or topic).casefold(); existing=self.state["active"].get(key)
             if existing:return existing
-            now=time.time(); item={"trajectory_id":uuid.uuid4().hex,"key":key,"topic":topic,"reason":reason,"status":"active","opened_at":now,"updated_at":now,"steps":0,"cumulative_gain":0.0,"last_gain":None,"last_decision":None,"sources":{},"hypotheses":{},"target_before":target or {}}
+            now=time.time(); item={"trajectory_id":uuid.uuid4().hex,"key":key,"topic":topic,"reason":reason,"status":"active","opened_at":now,"updated_at":now,"steps":0,"cumulative_gain":0.0,"last_gain":None,"last_decision":None,"sources":{},"hypotheses":{},"recent_gains":[],"target_before":target or {}}
             self.state["active"][key]=item; self.state["stats"]["opened"]+=1; self._append({"kind":"trajectory_opened",**item}); self._save(); return item
+    @staticmethod
+    def saturation(item:dict,feedback:dict)->dict:
+        """Conservative stop rule: enough evidence, diversity and sustained positive resolution."""
+        gains=list(item.get("recent_gains") or [])[-3:]
+        steps=int(item.get("steps") or 0); sources=len([k for k in (item.get("sources") or {}) if k!="unknown"])
+        after=float(feedback.get("after") if feedback.get("after") is not None else 1.0)
+        recent_positive=len(gains)>=2 and all(float(g)>0 for g in gains[-2:])
+        no_recent_contradiction=not gains or all(float(g)>=0 for g in gains[-3:])
+        saturated=steps>=3 and sources>=2 and after<=0.30 and recent_positive and no_recent_contradiction
+        return {"saturated":saturated,"steps":steps,"source_diversity":sources,"epistemic_need":after,"recent_positive":recent_positive,"no_recent_contradiction":no_recent_contradiction}
     def record_feedback(self,topic:str,feedback:dict,event:dict|None=None):
         with self._lock:
             key=str(feedback.get("key") or topic).casefold(); item=self.state["active"].get(key) or self.open(topic,{"key":key},"feedback_recovery")
             gain=float(feedback.get("gain") or 0.0); decision=str(feedback.get("decision") or "")
-            item["steps"]+=1; item["cumulative_gain"]=round(float(item.get("cumulative_gain",0))+gain,4); item["last_gain"]=gain; item["last_decision"]=decision; item["updated_at"]=time.time()
+            item["steps"]+=1; item["cumulative_gain"]=round(float(item.get("cumulative_gain",0))+gain,4); item["last_gain"]=gain; item["last_decision"]=decision; item["updated_at"]=time.time(); item.setdefault("recent_gains",[]).append(gain); item["recent_gains"]=item["recent_gains"][-5:]
             provider=str((event or {}).get("provider") or "unknown"); item["sources"][provider]=int(item["sources"].get(provider,0))+1
             self.state["stats"]["steps"]+=1; bucket="positive_gain" if gain>0 else "negative_gain" if gain<0 else "zero_gain"; self.state["stats"][bucket]+=1
-            self._append({"kind":"trajectory_step","trajectory_id":item["trajectory_id"],"key":key,"topic":topic,"gain":gain,"decision":decision,"provider":provider,"time":time.time()}); self._save(); return item
+            saturation=self.saturation(item,feedback); item["saturation"]=saturation
+            self._append({"kind":"trajectory_step","trajectory_id":item["trajectory_id"],"key":key,"topic":topic,"gain":gain,"decision":decision,"provider":provider,"saturation":saturation,"time":time.time()}); self._save(); return item
     def close(self,key:str,reason:str="saturated"):
         with self._lock:
             key=key.casefold(); item=self.state["active"].pop(key,None)
