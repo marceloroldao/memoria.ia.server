@@ -45,12 +45,16 @@ class EpistemicFeedback:
         else:self.zero_gain+=1; decision="change_source_or_jump"
         topic=gain.get("topic") or target.get("topic")
         feedback={**gain,"key":gain.get("key") or target.get("key") or topic,"gain":value,"decision":decision}
-        trajectory=None
+        trajectory=None; closed=None
         if self.trajectories is not None:
             self.trajectories.open(str(topic),target,"epistemic_gap")
             trajectory=self.trajectories.record_feedback(str(topic),feedback,event)
+            if (trajectory.get("saturation") or {}).get("saturated"):
+                closed=self.trajectories.close(str(feedback["key"]),"evidence_saturated")
+                self.curiosity._event("epistemic_saturated","Trajetória pausada por saturação conservadora de evidência.",topic=str(topic),trajectory_id=trajectory.get("trajectory_id"),saturation=trajectory.get("saturation"))
         details={"topic":target.get("topic"),"decision":decision,"learned":int(learning_result.get("learned") or 0),**gain}
-        if trajectory is not None:details["trajectory_id"]=trajectory.get("trajectory_id");details["trajectory_steps"]=trajectory.get("steps");details["trajectory_cumulative_gain"]=trajectory.get("cumulative_gain")
+        if trajectory is not None:details["trajectory_id"]=trajectory.get("trajectory_id");details["trajectory_steps"]=trajectory.get("steps");details["trajectory_cumulative_gain"]=trajectory.get("cumulative_gain");details["saturation"]=trajectory.get("saturation")
+        if closed is not None:details["trajectory_closed"]=True
         self.curiosity._event("epistemic_feedback",f"Ganho epistêmico {value:+.4f} em {topic}",**details)
         self._steer(decision,topic)
 
