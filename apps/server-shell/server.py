@@ -12,6 +12,7 @@ from auth import AuthManager
 from autonomous_tests import AutonomousTestManager
 from config import ShellConfig
 from curiosity_engine import CuriosityEngine
+from epistemic_feedback import EpistemicFeedback
 from growth_diagnostics import GrowthDiagnostics
 from knowledge_bdr import KnowledgeBDR
 from learning_worker import LearningWorker
@@ -128,7 +129,7 @@ def main():
     if a.port:c=ShellConfig(**{**c.__dict__,"port":a.port})
     if not c.admin_password:raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
     ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.curiosity=CuriosityEngine(c,ShellHandler.knowledge);ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
-    kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb);ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics")
+    kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback")
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:learner.stop();ShellHandler.curiosity.stop();server.server_close()

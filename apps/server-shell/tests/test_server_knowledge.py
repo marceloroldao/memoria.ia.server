@@ -31,6 +31,17 @@ def make_events(tmp_path):
 def test_learning_worker_persists_to_bdr_before_advancing_cursor(tmp_path):
     c=make_events(tmp_path); k=ServerKnowledge(str(tmp_path/"knowledge")); b=FakeBDR(); w=LearningWorker(k,str(c),bdr=b); assert w.cycle_once()==3; assert len(b.writes)==1; assert w.snapshot()["processed_evidence"]==1
 
+def test_feedback_runs_only_after_bdr_and_knowledge_update(tmp_path):
+    c=make_events(tmp_path); k=ServerKnowledge(str(tmp_path/"knowledge")); b=FakeBDR(); seen=[]
+    def feedback(event,result):seen.append((len(b.writes),bool(k.query("BLDC")["hits"]),result.get("learned")))
+    w=LearningWorker(k,str(c),bdr=b,feedback=feedback); w.cycle_once(); assert seen==[(1,True,3)]
+
+def test_feedback_does_not_run_when_bdr_persistence_fails(tmp_path):
+    c=make_events(tmp_path); k=ServerKnowledge(str(tmp_path/"knowledge")); seen=[]; w=LearningWorker(k,str(c),bdr=FailingBDR(),feedback=lambda e,r:seen.append(e))
+    try:w.cycle_once()
+    except RuntimeError:pass
+    assert seen==[]
+
 def test_learning_worker_keeps_evidence_pending_on_bdr_failure(tmp_path):
     c=make_events(tmp_path); k=ServerKnowledge(str(tmp_path/"knowledge")); w=LearningWorker(k,str(c),bdr=FailingBDR()); start=w.offset
     try:w.cycle_once()
