@@ -1,0 +1,60 @@
+RESOLUTIVE RESEARCH AND NON-COMMERCIAL LICENSE (RRNCL) v1.0
+
+Copyright (c) 2026 Marcelo Roldão Matos
+All rights reserved except as expressly granted below.
+
+1. PURPOSE
+This license governs use of the software, source code, documentation, experiments, models, specifications, datasets, examples, and other materials distributed in this repository (collectively, the "Work").
+
+2. PERMITTED NON-COMMERCIAL USES
+Subject to the conditions of this license, permission is granted, free of charge, to use, copy, study, reproduce, modify, and redistribute the Work for:
+(a) academic research;
+(b) scientific research;
+(c) education and teaching;
+(d) personal experimentation and evaluation; and
+(e) non-commercial research performed by universities, schools, public research institutions, and non-profit organizations.
+
+3. CONDITIONS
+Any copy, substantial portion, modification, redistribution, publication, or derivative work must:
+(a) preserve this license notice;
+(b) preserve the copyright notice;
+(c) provide appropriate attribution to Marcelo Roldão Matos and to this repository;
+(d) clearly indicate material modifications made to the Work;
+(e) not represent a modified version as an official version of the original project; and
+(f) comply with any additional attribution or citation instructions included in the repository.
+
+4. COMMERCIAL USE
+No commercial rights are granted by this license.
+Commercial use includes, without limitation, use of the Work or a derivative work in connection with:
+(a) a product or service offered for payment;
+(b) proprietary software, hosted services, consulting, licensing, integration, or commercial deployment;
+(c) internal business operations whose primary purpose is commercial advantage or monetary compensation; or
+(d) resale, sublicensing, monetization, or commercial distribution.
+Any commercial use requires a separate written commercial license or authorization from the copyright holder.
+
+5. RESEARCH RESULTS AND PUBLICATIONS
+Academic or scientific publications may describe, evaluate, benchmark, criticize, reproduce experimental results from, or build upon the Work, provided that applicable attribution and citation requirements are observed.
+
+6. NO TRADEMARK RIGHTS
+This license does not grant permission to use project names, logos, trademarks, service marks, or the name of the copyright holder to endorse or promote products or services without prior written permission.
+
+7. PATENTS
+No patent license is granted by implication or otherwise, except to the extent explicitly stated in a separate written agreement.
+
+8. NO WARRANTY
+THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, OR FITNESS FOR SCIENTIFIC, ENGINEERING, SAFETY-CRITICAL, OR COMMERCIAL USE.
+
+9. LIMITATION OF LIABILITY
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDER AND CONTRIBUTORS SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE WORK OR ITS USE.
+
+10. TERMINATION
+Rights granted under this license terminate automatically upon material breach of its terms. Rights may be restored only after the breach is cured and the copyright holder permits continued use, where required by applicable law.
+
+11. NO OPEN SOURCE REPRESENTATION
+Because this license restricts commercial use, it is not intended to qualify as an "Open Source" license under the Open Source Initiative definition. The Work may be publicly available source code, but should not be represented as OSI-approved open source unless separately relicensed under an OSI-approved license.
+
+12. SEPARATE COMMERCIAL LICENSING
+For commercial licensing, commercial partnerships, or permissions outside the scope of this license, contact the copyright holder through the official project repository or another contact method designated by the copyright holder.
+
+13. GOVERNING PRINCIPLE
+Where a use is not expressly permitted by this license, permission is reserved and must be obtained from the copyright holder.
