@@ -1,4 +1,4 @@
-"""Close the curiosity loop after BDR persistence and local knowledge update."""
+"""Close the curiosity loop after BDR persistence and steer the next exploration."""
 from __future__ import annotations
 import json
 from pathlib import Path
@@ -7,7 +7,7 @@ from epistemic_curiosity import measure_epistemic_gain
 class EpistemicFeedback:
     def __init__(self, knowledge, curiosity, curiosity_data_dir: str) -> None:
         self.knowledge=knowledge; self.curiosity=curiosity; self.events_file=Path(curiosity_data_dir)/"events.jsonl"
-        self.feedback_count=0; self.positive_gain=0; self.zero_gain=0; self.negative_gain=0; self.total_gain=0.0
+        self.feedback_count=0; self.positive_gain=0; self.zero_gain=0; self.negative_gain=0; self.total_gain=0.0; self.last_decision=None
 
     def _target_for(self,event):
         topic=str(event.get("topic") or "").casefold()
@@ -21,6 +21,21 @@ class EpistemicFeedback:
                 return {k:v for k,v in item.items() if k in {"topic","key","epistemic_need","confidence","observations","provider_diversity","relation_strength"}}
         return None
 
+    def _steer(self,decision,topic):
+        """Translate measured gain into an observable next-cycle control signal."""
+        topic=str(topic or "")
+        if decision=="change_source_or_jump":
+            self.curiosity.state.stagnation=self.curiosity.config.curiosity_stagnation_limit
+            self.curiosity._event("epistemic_steering","Sem ganho: próximo ciclo fará salto de trajetória.",topic=topic,decision=decision)
+        else:
+            # Permit the unresolved address to be selected again despite the anti-loop trajectory.
+            folded=topic.casefold(); self.curiosity.state.trajectory=[x for x in self.curiosity.state.trajectory if str(x).casefold()!=folded]
+            self.curiosity.state.stagnation=0
+            message="Ganho positivo: endereço liberado para reforço/expansão." if decision=="reinforce_or_expand" else "Ganho negativo: endereço liberado para investigação mais profunda."
+            self.curiosity._event("epistemic_steering",message,topic=topic,decision=decision)
+        self.last_decision=decision
+        self.curiosity._wake.set()
+
     def __call__(self,event,learning_result):
         target=self._target_for(event)
         if target is None:return
@@ -29,8 +44,10 @@ class EpistemicFeedback:
         if value>0:self.positive_gain+=1; decision="reinforce_or_expand"
         elif value<0:self.negative_gain+=1; decision="investigate_deeper"
         else:self.zero_gain+=1; decision="change_source_or_jump"
-        self.curiosity._event("epistemic_feedback",f"Ganho epistêmico {value:+.4f} em {gain.get('topic') or target.get('topic')}",topic=target.get("topic"),decision=decision,learned=int(learning_result.get("learned") or 0),**gain)
+        topic=gain.get("topic") or target.get("topic")
+        self.curiosity._event("epistemic_feedback",f"Ganho epistêmico {value:+.4f} em {topic}",topic=target.get("topic"),decision=decision,learned=int(learning_result.get("learned") or 0),**gain)
+        self._steer(decision,topic)
 
     def snapshot(self):
         avg=round(self.total_gain/self.feedback_count,4) if self.feedback_count else 0.0
-        return {"feedback_count":self.feedback_count,"positive_gain":self.positive_gain,"zero_gain":self.zero_gain,"negative_gain":self.negative_gain,"total_gain":self.total_gain,"average_gain":avg}
+        return {"feedback_count":self.feedback_count,"positive_gain":self.positive_gain,"zero_gain":self.zero_gain,"negative_gain":self.negative_gain,"total_gain":self.total_gain,"average_gain":avg,"last_decision":self.last_decision}
