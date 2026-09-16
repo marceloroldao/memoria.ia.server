@@ -5,6 +5,7 @@ from types import SimpleNamespace
 SHELL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SHELL))
 
+import guided_curiosity
 from guided_curiosity import TrajectoryGuidedCuriosityEngine
 
 
@@ -70,3 +71,25 @@ def test_recent_address_gets_recency_penalty(tmp_path):
 def test_snapshot_reports_guidance_enabled(tmp_path):
     engine = TrajectoryGuidedCuriosityEngine(config(tmp_path), trajectories=SnapshotStore({"active":[],"closed":[]}))
     assert engine.snapshot()["configuration"]["trajectory_guidance"] is True
+
+
+def test_epistemic_target_may_contain_topic_without_duplicate_keyword(tmp_path, monkeypatch):
+    store = SnapshotStore({"active": [], "closed": []})
+    engine = TrajectoryGuidedCuriosityEngine(config(tmp_path), knowledge=object(), trajectories=store)
+    engine.state.current_topic = "sensores"
+    monkeypatch.setattr(
+        guided_curiosity,
+        "choose_epistemic_topic",
+        lambda knowledge, trajectory: (
+            "cache",
+            {"topic": "cache", "epistemic_need": 0.8, "observations": 3},
+        ),
+    )
+    topic, reason = engine._choose_topic()
+    assert topic == "cache"
+    assert reason == "trajectory_unexplored"
+    events = list(engine._events)
+    assert events[-2]["kind"] == "trajectory_guidance"
+    assert events[-1]["kind"] == "epistemic_target"
+    assert events[-1]["topic"] == "cache"
+    assert events[-1]["observations"] == 3
