@@ -39,7 +39,7 @@ class TrajectoryGuidedCuriosityEngine(CuriosityEngine):
         trajectory = self.state.trajectory[-12:]
         force = self.state.stagnation >= self.config.curiosity_stagnation_limit
 
-        # First preserve the canonical epistemic-gap signal, then let trajectory
+        # Preserve the canonical epistemic-gap signal, then let trajectory
         # history decide whether that address is worth another cycle.
         if not force and self.knowledge is not None:
             selected = choose_epistemic_topic(self.knowledge, trajectory=trajectory)
@@ -50,11 +50,15 @@ class TrajectoryGuidedCuriosityEngine(CuriosityEngine):
                     "epistemic_gap",
                 )
                 if choice is None or choice["state"] != "saturated":
+                    # target may already contain topic; normalize it before
+                    # forwarding metadata to _event so keyword arguments are unique.
+                    target_details = dict(target)
+                    target_details.pop("topic", None)
                     self._event(
                         "epistemic_target",
                         f"Lacuna epistêmica selecionada: {topic}",
                         topic=topic,
-                        **target,
+                        **target_details,
                     )
                     return topic, (choice or {}).get("reason") or "epistemic_gap"
                 self._event(
