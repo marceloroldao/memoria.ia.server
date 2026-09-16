@@ -55,11 +55,10 @@ if [ "$HEALTH_OK" -ne 1 ]; then
 fi
 
 echo; echo "Validando arquivos da interface dentro do container..."
-# /admin/memoria pode redirecionar para /login sem sessao; portanto a validacao
-# de deploy deve verificar os assets efetivamente copiados para a imagem.
 docker compose exec -T server sh -c "grep -q 'diagnostics-fix.js' /app/apps/memoria-admin/static/index.html" || { echo 'ERRO: index.html da imagem nao referencia diagnostics-fix.js'; exit 1; }
 docker compose exec -T server sh -c "test -s /app/apps/memoria-admin/static/diagnostics-fix.js && grep -q 'Baixar relatório TXT' /app/apps/memoria-admin/static/diagnostics-fix.js" || { echo 'ERRO: modulo diagnostics-fix.js ausente na imagem'; exit 1; }
-docker compose exec -T server sh -c "grep -q 'Do not reload BDR history here' /app/apps/memoria-admin/static/history-fix.js" || { echo 'ERRO: hotfix resiliente do chat ausente na imagem'; exit 1; }
+# Validate the actual resilient implementation, not a comment/string that need not exist.
+docker compose exec -T server sh -c "grep -q 'persistBestEffort' /app/apps/memoria-admin/static/history-fix.js && grep -q 'a resolução continuará' /app/apps/memoria-admin/static/history-fix.js" || { echo 'ERRO: hotfix resiliente do chat ausente na imagem'; exit 1; }
 echo "INTERFACE: OK - TXT + chat hotfix presentes na imagem"
 
 echo; echo "========================================"
