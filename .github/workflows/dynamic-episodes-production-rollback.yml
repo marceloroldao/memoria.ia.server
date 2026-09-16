@@ -1,0 +1,113 @@
+name: Dynamic episodes production rollback
+
+on:
+  push:
+    branches: [deploy/dynamic-episodes-production]
+    paths:
+      - 'deploy/update-dynamic-episodes-production.sh'
+      - 'deploy/ci/episode_upgrade_probe.c'
+      - '.github/workflows/dynamic-episodes-production-rollback.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-upgrade-rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OLD_MEMORIA: 973564683762fde26c36a6993a2982f804504bc1
+      NEW_MEMORIA: ec817397b67ad0fadb3e1ec0b82e6a837869e0a1
+      BDR: eb77ad7286f234243ca1ed1a2af2d55df8c12238
+      DATA: ${{ github.workspace }}/production-data
+      ORG: production-upgrade
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate production patch syntax and pins
+        run: |
+          bash -n deploy/update-dynamic-episodes-production.sh
+          grep -q "TARGET_MEMORIA=\"$NEW_MEMORIA\"" deploy/update-dynamic-episodes-production.sh
+          grep -q "TARGET_BDR=\"$BDR\"" deploy/update-dynamic-episodes-production.sh
+          grep -q 'memoria-data.tgz' deploy/update-dynamic-episodes-production.sh
+          grep -q 'rollback.sh' deploy/update-dynamic-episodes-production.sh
+
+      - uses: actions/checkout@v4
+        with:
+          repository: marceloroldao/resolutive-DB
+          ref: eb77ad7286f234243ca1ed1a2af2d55df8c12238
+          path: resolutive-DB
+
+      - uses: actions/checkout@v4
+        with:
+          repository: marceloroldao/memoria.ia
+          ref: 973564683762fde26c36a6993a2982f804504bc1
+          path: memoria-old
+
+      - uses: actions/checkout@v4
+        with:
+          repository: marceloroldao/memoria.ia
+          ref: ec817397b67ad0fadb3e1ec0b82e6a837869e0a1
+          path: memoria-new
+
+      - name: Verify exact source identities
+        run: |
+          test "$(git -C resolutive-DB rev-parse HEAD)" = "$BDR"
+          test "$(git -C memoria-old rev-parse HEAD)" = "$OLD_MEMORIA"
+          test "$(git -C memoria-new rev-parse HEAD)" = "$NEW_MEMORIA"
+          grep -q '#define MAX_EPISODES 256' memoria-old/native/mobile/memoria_mobile.c
+          grep -q '#define INITIAL_EPISODE_CAPACITY 256u' memoria-new/native/mobile/memoria_mobile.c
+          ! grep -q '#define MAX_EPISODES 256' memoria-new/native/mobile/memoria_mobile.c
+
+      - name: Build old and upgraded runtimes against frozen BDR
+        run: |
+          cmake -S memoria-old/native/mobile -B build-old -DCMAKE_BUILD_TYPE=Release -DMEMORIA_BDR_ROOT="$GITHUB_WORKSPACE/resolutive-DB"
+          cmake --build build-old --target memoria_mobile --config Release -j2
+          cmake -S memoria-new/native/mobile -B build-new -DCMAKE_BUILD_TYPE=Release -DMEMORIA_BDR_ROOT="$GITHUB_WORKSPACE/resolutive-DB"
+          cmake --build build-new --target memoria_mobile --config Release -j2
+          cc -std=c11 -Imemoria-old/include deploy/ci/episode_upgrade_probe.c -Lbuild-old -lmemoria_mobile -Wl,-rpath,"$GITHUB_WORKSPACE/build-old" -o probe-old
+          cc -std=c11 -Imemoria-new/include deploy/ci/episode_upgrade_probe.c -Lbuild-new -lmemoria_mobile -Wl,-rpath,"$GITHUB_WORKSPACE/build-new" -o probe-new
+
+      - name: Create legacy production state with exactly 256 episodes
+        run: |
+          rm -rf "$DATA" backup
+          mkdir -p "$DATA" backup
+          LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build-old" ./probe-old seed "$DATA" "$ORG" 256
+          LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build-old" ./probe-old verify "$DATA" "$ORG" 256
+
+      - name: Backup production state before upgrade
+        run: |
+          tar -C "$DATA" -czf backup/memoria-data.tgz .
+          test -s backup/memoria-data.tgz
+          sha256sum backup/memoria-data.tgz | tee backup/memoria-data.tgz.sha256
+
+      - name: Upgrade runtime and preserve all 256 legacy episodes
+        run: |
+          LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build-new" ./probe-new verify "$DATA" "$ORG" 256
+
+      - name: Write beyond 256 with upgraded runtime
+        run: |
+          LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build-new" ./probe-new extend "$DATA" "$ORG" 300
+          LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build-new" ./probe-new verify "$DATA" "$ORG" 300
+
+      - name: Simulate production rollback from snapshot
+        run: |
+          rm -rf "$DATA"
+          mkdir -p "$DATA"
+          tar -C "$DATA" -xzf backup/memoria-data.tgz
+          sha256sum -c backup/memoria-data.tgz.sha256
+
+      - name: Validate rollback restores exactly the original 256-state
+        run: |
+          LD_LIBRARY_PATH="$GITHUB_WORKSPACE/build-old" ./probe-old verify "$DATA" "$ORG" 256
+          echo 'BACKUP_UPGRADE_256_TO_300_ROLLBACK=PASS'
+
+      - name: Upload rollback evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamic-episodes-production-rollback-evidence
+          path: |
+            backup/memoria-data.tgz.sha256
+            deploy/update-dynamic-episodes-production.sh
+          retention-days: 14
