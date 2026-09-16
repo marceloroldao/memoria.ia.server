@@ -42,5 +42,6 @@ def test_model_catalog_namespace_is_sent_to_gateway():
 
 def test_module_static_routes_are_explicit():
     assert static_target("/admin/memoria").name == "index.html"
+    assert static_target("/admin/memoria/diagnostics-fix.js").name == "diagnostics-fix.js"
     assert static_target("/explorer/bdr/app.js").name == "app.js"
     assert static_target("/../../etc/passwd") is None
