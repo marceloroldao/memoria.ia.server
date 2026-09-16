@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-COMMIT="8b18a204643339d84a07d019f0410eefa8407f0c"
+COMMIT="4c54c559c70ca67471b7fe09bc6762b9e60721c2"
 PROJECT="${MEMORIA_SERVER_DIR:-$HOME/memoria.ia.server}"
+HEALTH_URL="http://127.0.0.1:8780/api/server/v1/health"
 
 echo "========================================"
 echo " Memoria.ia Server - Update V2"
@@ -14,7 +15,6 @@ cd "$PROJECT"
 echo
 echo "[1/7] Verificando repositorio..."
 git status --short
-
 if ! git diff --quiet || ! git diff --cached --quiet; then
     echo
     echo "ERRO: existem alteracoes locais versionadas."
@@ -28,7 +28,7 @@ echo "[2/7] Buscando atualizacoes..."
 git fetch origin
 
 echo
-echo "[3/7] Fixando commit validado..."
+echo "[3/7] Fixando commit validado/candidato..."
 git checkout --detach "$COMMIT"
 CURRENT="$(git rev-parse HEAD)"
 if [ "$CURRENT" != "$COMMIT" ]; then
@@ -56,20 +56,27 @@ echo "[7/7] Estado dos containers..."
 docker compose ps
 
 echo
-echo "Aguardando servidor iniciar..."
-sleep 8
-
-echo
 echo "========================================"
 echo " HEALTH CHECK"
 echo "========================================"
-if curl -fsS http://127.0.0.1:8780/api/server/v1/health; then
+echo "Aguardando ate 90s pelo servidor..."
+HEALTH_OK=0
+for attempt in $(seq 1 30); do
+    if curl -fsS --max-time 2 "$HEALTH_URL" >/tmp/memoria-health.json 2>/dev/null; then
+        HEALTH_OK=1
+        echo "HEALTH: OK na tentativa $attempt"
+        cat /tmp/memoria-health.json
+        echo
+        break
+    fi
+    printf '.'
+    sleep 3
+done
+if [ "$HEALTH_OK" -ne 1 ]; then
     echo
-    echo "HEALTH: OK"
-else
-    echo
-    echo "ERRO: health check falhou."
-    docker compose logs --tail=100 server
+    echo "ERRO: health check nao respondeu em ate 90s."
+    docker compose ps
+    docker compose logs --tail=150 server
     exit 1
 fi
 
@@ -83,4 +90,4 @@ echo "Acompanhando trajectory_guidance, epistemic_target, topic, evidence, learn
 echo "CTRL+C encerra somente a visualizacao; o servidor continua funcionando."
 echo
 
-docker compose logs -f --tail=100 server | grep -E --line-buffered 'trajectory_guidance|epistemic_target|topic:|evidence:|learning|stagnation|error'
+docker compose logs -f --tail=100 server | grep -E --line-buffered 'trajectory_guidance|epistemic_target|trajectory_deferred|topic:|evidence:|learning|stagnation|error'
