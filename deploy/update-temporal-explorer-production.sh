@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 PROJECT="${MEMORIA_SERVER_DIR:-$HOME/memoria.ia.server}"
 TARGET_SERVER="b17657a581060f0b5badeeb39f62b91f84e508ff"
-TARGET_MEMORIA="7e6d11ebbb0c4a00572fbf8e5822bf9e78e29597"
+TARGET_MEMORIA="adeca62bfa2af278ccf8f7957efea0072f7bfb01"
 TARGET_BDR="eb77ad7286f234243ca1ed1a2af2d55df8c12238"
 BACKUP_ROOT="${MEMORIA_BACKUP_ROOT:-$HOME/memoria.ia.backups}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
