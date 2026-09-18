@@ -33,7 +33,7 @@ def proxy_target(c,path):
 def static_target(path):
     r={"/":SHELL_STATIC/"index.html","/index.html":SHELL_STATIC/"index.html","/shell.css":SHELL_STATIC/"shell.css","/shell.js":SHELL_STATIC/"shell.js","/login":SHELL_STATIC/"login.html","/login.css":SHELL_STATIC/"login.css","/login.js":SHELL_STATIC/"login.js","/admin/memoria":MEMORIA_STATIC/"index.html","/admin/memoria/":MEMORIA_STATIC/"index.html","/admin/memoria/style.css":MEMORIA_STATIC/"style.css","/admin/memoria/app.js":MEMORIA_STATIC/"app.js","/admin/memoria/history-fix.js":MEMORIA_STATIC/"history-fix.js","/admin/memoria/curiosity-admin.js":MEMORIA_STATIC/"curiosity-admin.js","/admin/memoria/diagnostics-fix.js":MEMORIA_STATIC/"diagnostics-fix.js","/admin/memoria/growth-diagnostics.js":MEMORIA_STATIC/"growth-diagnostics.js","/explorer/bdr":BDR_STATIC/"index.html","/explorer/bdr/":BDR_STATIC/"index.html","/explorer/bdr/styles.css":BDR_STATIC/"styles.css","/explorer/bdr/app.js":BDR_STATIC/"app.js"}; return r.get(path)
 class ShellHandler(BaseHTTPRequestHandler):
-    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore
+    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; learner:LearningWorker
     episode_write_lock=Lock()
     def _session_token(self):
         raw=self.headers.get("Cookie")
@@ -94,6 +94,33 @@ class ShellHandler(BaseHTTPRequestHandler):
         if not r.token:self._write_json(401,{"error":"invalid_credentials"});return
         self._write_json(200,{"status":"authenticated","username":self.config.admin_username},{"Set-Cookie":self._cookie_header(r.token,self.config.session_hours*3600)})
     def _logout(self):self.auth.logout(self._session_token());self._write_json(200,{"status":"logged_out"},{"Set-Cookie":self._cookie_header("",0)})
+    def _format_bdr(self):
+        if self.command!="POST":self._write_json(405,{"error":"method_not_allowed"},{"Allow":"POST"});return
+        body=self._read_body()
+        if body is None:return
+        try:payload=json.loads(body.decode() or "{}")
+        except Exception:self._write_json(400,{"error":"invalid_request"});return
+        if str(payload.get("confirm") or "")!="FORMATAR":
+            self._write_json(400,{"error":"confirmation_required","detail":"Digite FORMATAR exatamente para apagar o BDR."});return
+        was_enabled=bool(self.curiosity.state.enabled)
+        self.curiosity.action("pause")
+        try:
+            data=json.dumps({"confirm":"FORMATAR"},separators=(",",":")).encode()
+            headers={"Content-Type":"application/json"}
+            if self.config.memoria_api_key:headers["X-Memoria-Key"]=self.config.memoria_api_key
+            with self.episode_write_lock:
+                req=Request(self.config.memoria_api_url+"/api/v1/episodes/format",data=data,headers=headers,method="POST")
+                with urlopen(req,timeout=max(15.0,self.config.proxy_timeout_seconds)) as response:
+                    upstream=json.loads(response.read().decode("utf-8") or "{}")
+                self.knowledge.reset()
+                skipped=self.learner.reset_to_current_end()
+            self._write_json(200,{"schema":"memoria-server-format-bdr/v1","formatted":True,"upstream":upstream,"learning_cursor":skipped,"curiosity_resumed":was_enabled})
+        except HTTPError as exc:
+            detail=exc.read().decode("utf-8",errors="replace")[:2000]
+            self._write_json(exc.code,{"error":"format_failed","detail":detail})
+        except Exception as exc:self._write_json(500,{"error":"format_failed","detail":str(exc)})
+        finally:
+            if was_enabled:self.curiosity.action("resume")
     def _component_health(self,b,p):
         try:
             with urlopen(Request(b+p,method="GET"),timeout=min(self.config.proxy_timeout_seconds,3.0)) as r:return {"status":"online" if r.status<400 else "degraded","code":r.status}
@@ -119,6 +146,7 @@ class ShellHandler(BaseHTTPRequestHandler):
         if self.knowledge.dispatch(self,path,q):return
         if self.autotests.dispatch(self,path,q):return
         if path=="/api/server/v1/session":self._write_json(200,{"authenticated":True,"username":self.config.admin_username});return
+        if path=="/api/server/v1/format-bdr":self._format_bdr();return
         if path=="/api/server/v1/logout":self._write_json(405,{"error":"method_not_allowed"},{"Allow":"POST"}) if self.command!="POST" else self._logout();return
         t=proxy_target(self.config,path)
         if t:self._proxy(t);return
@@ -133,7 +161,7 @@ def main():
     if a.port:c=ShellConfig(**{**c.__dict__,"port":a.port})
     if not c.admin_password:raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
     ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.trajectories=EpistemicTrajectoryStore(str(Path(c.curiosity_data_dir)/"trajectories"));ShellHandler.curiosity=TrajectoryGuidedCuriosityEngine(c,ShellHandler.knowledge,ShellHandler.trajectories);ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
-    kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir,trajectories=ShellHandler.trajectories);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback + Epistemic Trajectories")
+    kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir,trajectories=ShellHandler.trajectories);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.learner=learner;ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback + Epistemic Trajectories")
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:learner.stop();ShellHandler.curiosity.stop();server.server_close()
