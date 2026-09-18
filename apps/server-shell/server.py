@@ -108,12 +108,15 @@ class ShellHandler(BaseHTTPRequestHandler):
             data=json.dumps({"confirm":"FORMATAR"},separators=(",",":")).encode()
             headers={"Content-Type":"application/json"}
             if self.config.memoria_api_key:headers["X-Memoria-Key"]=self.config.memoria_api_key
-            with self.episode_write_lock:
-                req=Request(self.config.memoria_api_url+"/api/v1/episodes/format",data=data,headers=headers,method="POST")
-                with urlopen(req,timeout=max(15.0,self.config.proxy_timeout_seconds)) as response:
-                    upstream=json.loads(response.read().decode("utf-8") or "{}")
-                self.knowledge.reset()
-                skipped=self.learner.reset_to_current_end()
+            # Lock order is learner cycle -> episode writer. Learning uses the same
+            # order, so no old evidence can slip back into the freshly formatted BDR.
+            with self.learner.quiesced():
+                with self.episode_write_lock:
+                    req=Request(self.config.memoria_api_url+"/api/v1/episodes/format",data=data,headers=headers,method="POST")
+                    with urlopen(req,timeout=max(15.0,self.config.proxy_timeout_seconds)) as response:
+                        upstream=json.loads(response.read().decode("utf-8") or "{}")
+                    self.knowledge.reset()
+                    skipped=self.learner.reset_to_current_end()
             self._write_json(200,{"schema":"memoria-server-format-bdr/v1","formatted":True,"upstream":upstream,"learning_cursor":skipped,"curiosity_resumed":was_enabled})
         except HTTPError as exc:
             detail=exc.read().decode("utf-8",errors="replace")[:2000]
