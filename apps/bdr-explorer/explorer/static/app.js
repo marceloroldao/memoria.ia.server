@@ -25,9 +25,9 @@ function renderMetrics(stats) {
   const values = [
     ["registros", stats.records ?? 0],
     ["visíveis", stats.visible_records ?? 0],
-    ["buckets", stats.occupied_buckets ?? 0],
-    ["carga", Number(stats.load_factor ?? 0).toFixed(5)],
-    ["fases", stats.phase_slots ?? 0],
+    ["buckets janela", stats.occupied_buckets ?? 0],
+    ["carga janela", Number(stats.load_factor ?? 0).toFixed(5)],
+    ["fases janela", stats.phase_slots ?? 0],
   ];
   for (const item of values) root.appendChild(metric(...item));
 }
