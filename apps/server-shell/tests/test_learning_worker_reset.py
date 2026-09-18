@@ -23,3 +23,17 @@ def test_reset_to_current_end_skips_old_evidence(tmp_path):
     assert worker.offset == end
     assert (curiosity / "knowledge.cursor").read_text(encoding="utf-8") == str(end)
     assert worker.backlog_bytes() == 0
+
+
+def test_reset_can_run_inside_quiesced_guard(tmp_path):
+    curiosity = tmp_path / "curiosity"
+    curiosity.mkdir()
+    events = curiosity / "events.jsonl"
+    events.write_text('{"kind":"evidence","message":"old"}\n', encoding="utf-8")
+    worker = LearningWorker(Knowledge(), str(curiosity), poll_seconds=1)
+
+    with worker.quiesced():
+        end = worker.reset_to_current_end()
+
+    assert end == events.stat().st_size
+    assert worker.backlog_bytes() == 0
