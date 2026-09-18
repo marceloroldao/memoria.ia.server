@@ -32,8 +32,8 @@ services:
       context: .
       dockerfile: docker/memoria/Dockerfile
       args:
-        MEMORIA_COMMIT: ${MEMORIA_COMMIT:-973564683762fde26c36a6993a2982f804504bc1}
-        BDR_COMMIT: ${BDR_COMMIT:-1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e}
+        MEMORIA_COMMIT: ${MEMORIA_COMMIT:-7e6d11ebbb0c4a00572fbf8e5822bf9e78e29597}
+        BDR_COMMIT: ${BDR_COMMIT:-eb77ad7286f234243ca1ed1a2af2d55df8c12238}
     environment:
       MEMORIA_ORGANIZATION_ID: ${MEMORIA_ORGANIZATION_ID}
       MEMORIA_ORGANIZATION_NAME: ${MEMORIA_ORGANIZATION_NAME}
@@ -78,7 +78,7 @@ services:
       context: .
       dockerfile: docker/bdr-explorer/Dockerfile
       args:
-        BDR_COMMIT: ${BDR_COMMIT:-1f6b7ccbe16bdfed2f1b5dcebceb17887bf6916e}
+        BDR_COMMIT: ${BDR_COMMIT:-eb77ad7286f234243ca1ed1a2af2d55df8c12238}
     command: ["python", "-m", "explorer.server", "--host", "0.0.0.0", "--port", "8765", "--memoria-url", "http://memoria:8080", "--memoria-api-key", "${MEMORIA_API_KEY}"]
     depends_on:
       memoria: {condition: service_healthy}

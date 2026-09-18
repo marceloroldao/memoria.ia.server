@@ -1,0 +1,166 @@
+name: Temporal Explorer stack validation
+
+on:
+  push:
+    branches: [feature/explorer-temporal-viewport-format]
+    paths:
+      - 'apps/bdr-explorer/**'
+      - 'apps/server-shell/**'
+      - 'docker/**'
+      - 'compose.yaml'
+      - '.env.example'
+      - '.github/workflows/temporal-explorer-stack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare isolated stack configuration
+        run: |
+          cp .env.example .env
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('.env')
+          values={
+            'MEMORIA_SERVER_ADMIN_PASSWORD':'ci-admin-password',
+            'MEMORIA_API_KEY':'ci-memoria-secret-key',
+            'MEMORIA_ORGANIZATION_ID':'ci-temporal-explorer',
+            'MEMORIA_ORGANIZATION_NAME':'CI Temporal Explorer',
+            'MEMORIA_NODE_ID':'memoria:ci-temporal-explorer:primary',
+            'MEMORIA_CURIOSITY_ENABLED':'false',
+            'MEMORIA_COMMIT':'7e6d11ebbb0c4a00572fbf8e5822bf9e78e29597',
+            'BDR_COMMIT':'eb77ad7286f234243ca1ed1a2af2d55df8c12238',
+          }
+          lines=p.read_text().splitlines()
+          out=[]
+          seen=set()
+          for line in lines:
+              key=line.split('=',1)[0] if '=' in line and not line.lstrip().startswith('#') else None
+              if key in values:
+                  out.append(f'{key}={values[key]}'); seen.add(key)
+              else:
+                  out.append(line)
+          for key,val in values.items():
+              if key not in seen: out.append(f'{key}={val}')
+          p.write_text('\n'.join(out)+'\n')
+          PY
+
+      - name: Build exact production candidate stack
+        run: docker compose build memoria bdr-explorer model-gateway server
+
+      - name: Start isolated stack
+        run: docker compose up -d model-gateway memoria bdr-explorer server
+
+      - name: Wait for server health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8780/api/server/v1/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --tail=300
+          exit 1
+
+      - name: Seed raw episodes and validate paged Memoria API
+        run: |
+          docker compose exec -T memoria python - <<'PY'
+          import json, os
+          from urllib.request import Request, urlopen
+          base='http://127.0.0.1:8080'
+          key=os.environ['MEMORIA_API_KEY']
+          headers={'Content-Type':'application/json','X-Memoria-Key':key}
+          for i in range(1,131):
+              raw=f'<html><body><nav>menu {i}</nav><article>raw-{i}</article></body></html>'
+              body=json.dumps({
+                  'episode_id':f'ci-ep-{i}',
+                  'role':'user',
+                  'text':raw,
+                  'session_id':'ci:raw',
+                  'order':i,
+                  'timestamp':f'2026-09-18T20:{i%60:02d}:00Z',
+                  'event_type':'raw_html',
+                  'topics':[],
+              }).encode()
+              with urlopen(Request(base+'/api/v1/episodes',data=body,headers=headers,method='POST'),timeout=10) as r:
+                  assert r.status == 201
+          with urlopen(Request(base+'/api/v1/episodes/page?offset=100&limit=20',headers={'X-Memoria-Key':key}),timeout=10) as r:
+              page=json.load(r)
+          assert page['total'] == 130, page
+          assert page['offset'] == 100 and page['returned'] == 20, page
+          assert page['episodes'][0]['episode_id'] == 'ci-ep-101', page['episodes'][0]
+          assert '<html>' in page['episodes'][0]['text'], page['episodes'][0]['text']
+          print('MEMORIA_PAGE_OK', page['total'], page['offset'], page['returned'])
+          PY
+
+      - name: Validate bounded temporal Explorer projection and inspector metadata
+        run: |
+          docker compose exec -T bdr-explorer python - <<'PY'
+          import json
+          from urllib.request import urlopen
+          with urlopen('http://127.0.0.1:8765/api/snapshot?offset=100&limit=20',timeout=10) as r:
+              snap=json.load(r)
+          assert snap['window']['total'] == 130, snap['window']
+          assert snap['window']['offset'] == 100 and snap['window']['returned'] == 20, snap['window']
+          assert snap['statistics']['records'] == 130, snap['statistics']
+          assert snap['statistics']['visible_records'] == 20, snap['statistics']
+          assert len(snap['nodes']) == 20
+          episode=snap['nodes'][0]['episode']
+          assert episode['episode_id'].startswith('ci-ep-')
+          assert episode['event_type'] == 'raw_html'
+          assert snap['nodes'][0]['temporal_index'] >= 100
+          print('EXPLORER_WINDOW_OK', snap['window'])
+          PY
+
+      - name: Validate authenticated guarded format end to end
+        run: |
+          python - <<'PY'
+          import http.cookiejar, json
+          from urllib.request import HTTPCookieProcessor, Request, build_opener
+          opener=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+          base='http://127.0.0.1:8780'
+          login=json.dumps({'username':'admin','password':'ci-admin-password'}).encode()
+          with opener.open(Request(base+'/api/server/v1/login',data=login,headers={'Content-Type':'application/json'},method='POST'),timeout=10) as r:
+              assert r.status == 200
+          bad=json.dumps({'confirm':'formatar'}).encode()
+          try:
+              opener.open(Request(base+'/api/server/v1/format-bdr',data=bad,headers={'Content-Type':'application/json'},method='POST'),timeout=10)
+              raise AssertionError('lowercase confirmation must not be accepted')
+          except Exception as exc:
+              code=getattr(exc,'code',None)
+              assert code == 400, repr(exc)
+          good=json.dumps({'confirm':'FORMATAR'}).encode()
+          with opener.open(Request(base+'/api/server/v1/format-bdr',data=good,headers={'Content-Type':'application/json'},method='POST'),timeout=30) as r:
+              body=json.load(r)
+          assert body['formatted'] is True, body
+          assert body['upstream']['removed_episodes'] == 130, body
+          print('FORMAT_OK', body)
+          PY
+          docker compose exec -T memoria python - <<'PY'
+          import json, os
+          from urllib.request import Request, urlopen
+          key=os.environ['MEMORIA_API_KEY']
+          with urlopen(Request('http://127.0.0.1:8080/api/v1/episodes/page?offset=0&limit=1',headers={'X-Memoria-Key':key}),timeout=10) as r:
+              page=json.load(r)
+          assert page['total'] == 0, page
+          print('FORMAT_REOPEN_VIEW_OK', page)
+          PY
+
+      - name: Show diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps || true
+          docker compose logs --tail=500 || true
+
+      - name: Stop isolated stack
+        if: always()
+        run: docker compose down -v || true

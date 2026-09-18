@@ -6,7 +6,7 @@ import argparse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from bdr import BancoDeDadosResolutivo
 
@@ -54,13 +54,20 @@ class ExplorerHandler(SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
         try:
             if path == "/api/health":
                 self._json({"status": "ok", "read_only": True, "mode": self.mode})
                 return
             if path == "/api/snapshot":
-                self._json(self.provider.snapshot())
+                offset = int((query.get("offset") or ["0"])[0] or 0)
+                limit = int((query.get("limit") or ["900"])[0] or 900)
+                if hasattr(self.provider, "page"):
+                    self._json(self.provider.snapshot(offset=offset, limit=limit))
+                else:
+                    self._json(self.provider.snapshot())
                 return
             if path == "/api/observation":
                 if hasattr(self.provider, "observation"):
