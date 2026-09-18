@@ -8,7 +8,7 @@ on:
       - "apps/memoria-admin/static/**"
       - "docker/model-gateway/**"
       - "compose.yaml"
-      - "apps/bdr-explorer/explorer/static/**"
+      - "apps/bdr-explorer/**"
       - ".github/workflows/shell-validation.yml"
   pull_request:
     paths:
@@ -17,7 +17,7 @@ on:
       - "apps/memoria-admin/static/**"
       - "docker/model-gateway/**"
       - "compose.yaml"
-      - "apps/bdr-explorer/explorer/static/**"
+      - "apps/bdr-explorer/**"
 
 permissions:
   contents: read
@@ -35,6 +35,7 @@ jobs:
           node-version: "22"
       - run: python -m pip install pytest
       - run: python -m pytest apps/server-shell/tests -q
+      - run: PYTHONPATH=apps/bdr-explorer python -m pytest apps/bdr-explorer/tests -q
       - run: python -m pytest apps/model-gateway/tests -q
       - run: python -m compileall -q apps/server-shell apps/bdr-explorer/explorer
       - run: python -m compileall -q apps/model-gateway
