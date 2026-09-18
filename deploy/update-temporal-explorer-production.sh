@@ -75,9 +75,9 @@ cp -a "$BACKUP/.env" .env 2>/dev/null || true
 MEMORIA_VOLUME="$(cat "$BACKUP/memoria-volume.txt")"
 SERVER_VOLUME="$(cat "$BACKUP/server-volume.txt")"
 restore_volume() {
-  local volume="$1" archive="$2"
-  docker run --rm -v "$volume:/target" alpine:3.20 sh -c 'rm -rf /target/* /target/.[!.]* /target/..?* 2>/dev/null || true'
-  docker run --rm -v "$volume:/target" -v "$BACKUP:/backup:ro" alpine:3.20 sh -c "cd /target && tar xzf /backup/$archive"
+  local volume="\$1" archive="\$2"
+  docker run --rm -v "\$volume:/target" alpine:3.20 sh -c 'rm -rf /target/* /target/.[!.]* /target/..?* 2>/dev/null || true'
+  docker run --rm -v "\$volume:/target" -v "$BACKUP:/backup:ro" alpine:3.20 sh -c "cd /target && tar xzf /backup/\$archive"
 }
 echo '[rollback] restaurando memoria-data'
 restore_volume "$MEMORIA_VOLUME" memoria-data.tgz
