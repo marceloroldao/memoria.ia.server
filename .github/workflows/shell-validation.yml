@@ -27,13 +27,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: marceloroldao/resolutive-DB
+          ref: eb77ad7286f234243ca1ed1a2af2d55df8c12238
+          path: resolutive-DB
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: python -m pip install pytest
+      - run: python -m pip install pytest ./resolutive-DB
       - run: python -m pytest apps/server-shell/tests -q
       - run: PYTHONPATH=apps/bdr-explorer python -m pytest apps/bdr-explorer/tests -q
       - run: python -m pytest apps/model-gateway/tests -q
