@@ -91,13 +91,16 @@ jobs:
 
       - name: Run production updater
         env:
+          MEMORIA_SERVER_DIR: ${{ github.workspace }}
           MEMORIA_SERVER_HEALTH_URL: http://127.0.0.1:8780/api/server/v1/health
           MEMORIA_BACKUP_ROOT: /tmp/memoria-ci-backups
-        run: /tmp/update-temporal-explorer-production.sh | tee /tmp/update.log
+        run: |
+          set -o pipefail
+          /tmp/update-temporal-explorer-production.sh 2>&1 | tee /tmp/update.log
 
       - name: Validate upgraded state preserves all 300 rows
         run: |
-          test "$(git rev-parse HEAD)" = "b656afcc61c67dd7d07428b881295141bfd3a087"
+          test "$(git rev-parse HEAD)" = "b17657a581060f0b5badeeb39f62b91f84e508ff"
           grep -q '^MEMORIA_COMMIT=7e6d11ebbb0c4a00572fbf8e5822bf9e78e29597$' .env
           grep -q '^BDR_COMMIT=eb77ad7286f234243ca1ed1a2af2d55df8c12238$' .env
           docker compose exec -T memoria python - <<'PY'
