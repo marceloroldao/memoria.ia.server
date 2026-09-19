@@ -85,7 +85,7 @@ echo '[rollback] restaurando server-data'
 restore_volume "$SERVER_VOLUME" server-data.tgz
 docker compose build --no-cache memoria bdr-explorer server
 docker compose up -d
-for i in $(seq 1 60); do
+for i in \$(seq 1 60); do
   if curl -fsS --max-time 3 "$HEALTH_URL" >/tmp/memoria-rollback-health.json 2>/dev/null; then
     echo '[rollback] health OK'
     cat /tmp/memoria-rollback-health.json; echo
