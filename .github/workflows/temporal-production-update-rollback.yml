@@ -101,7 +101,7 @@ jobs:
       - name: Validate upgraded state preserves all 300 rows
         run: |
           test "$(git rev-parse HEAD)" = "b17657a581060f0b5badeeb39f62b91f84e508ff"
-          grep -q '^MEMORIA_COMMIT=e9de84dc4d2db92ba6caaf720808ce175c52166a$' .env
+          grep -q '^MEMORIA_COMMIT=bae11593f2c64bdb63fce84100213c16f88ca796$' .env
           grep -q '^BDR_COMMIT=eb77ad7286f234243ca1ed1a2af2d55df8c12238$' .env
           docker compose exec -T memoria python - <<'PY'
           import json, os
