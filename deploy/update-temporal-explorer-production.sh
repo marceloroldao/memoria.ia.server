@@ -176,7 +176,10 @@ offset=int(sys.argv[1])
 with urlopen(f'http://127.0.0.1:8765/api/snapshot?offset={offset}&limit=64',timeout=10) as r:
     body=json.load(r)
 assert body.get('schema') == 'bdr-explorer-snapshot/v0.2', body
-assert int(body.get('window',{}).get('count') or 0) >= int(body.get('window',{}).get('returned') or 0)
+window=body.get('window',{})
+assert int(window.get('total') or 0) >= int(window.get('returned') or 0), body
+assert int(window.get('offset') or 0) == offset, body
+assert int(window.get('limit') or 0) == 64, body
 assert len(body.get('nodes') or []) <= 64
 print(json.dumps(body.get('window',{}),ensure_ascii=False))
 PY
