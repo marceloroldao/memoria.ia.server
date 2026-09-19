@@ -155,16 +155,16 @@ import json, os
 from urllib.request import Request, urlopen
 key=os.environ.get('MEMORIA_API_KEY','')
 headers={'X-Memoria-Key':key} if key else {}
-with urlopen(Request('http://127.0.0.1:8080/api/v1/episodes/page?offset=0&limit=1',headers=headers),timeout=10) as r:
+with urlopen(Request('http://127.0.0.1:8080/api/v1/episodes/history?limit=5000',headers=headers),timeout=10) as r:
     body=json.load(r)
-assert body.get('schema') == 'memoria-episode-page/v1', body
-assert isinstance(body.get('total'), int), body
+assert body.get('schema') == 'memoria-episode-history/v1', body
+assert isinstance(body.get('count'), int), body
 print(json.dumps(body,ensure_ascii=False))
 PY
 cat "$BACKUP/memoria-page.json"
 TOTAL="$(python3 - "$BACKUP/memoria-page.json" <<'PY'
 import json,sys
-print(int(json.load(open(sys.argv[1])).get('total') or 0))
+print(int(json.load(open(sys.argv[1])).get('count') or 0))
 PY
 )"
 OFFSET=0
@@ -176,7 +176,7 @@ offset=int(sys.argv[1])
 with urlopen(f'http://127.0.0.1:8765/api/snapshot?offset={offset}&limit=64',timeout=10) as r:
     body=json.load(r)
 assert body.get('schema') == 'bdr-explorer-snapshot/v0.2', body
-assert int(body.get('window',{}).get('total') or 0) >= int(body.get('window',{}).get('returned') or 0)
+assert int(body.get('window',{}).get('count') or 0) >= int(body.get('window',{}).get('returned') or 0)
 assert len(body.get('nodes') or []) <= 64
 print(json.dumps(body.get('window',{}),ensure_ascii=False))
 PY
