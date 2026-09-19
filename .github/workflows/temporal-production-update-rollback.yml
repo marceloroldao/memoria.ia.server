@@ -42,7 +42,7 @@ jobs:
             'MEMORIA_NODE_ID':'memoria:ci-update-rollback:primary',
             'MEMORIA_CURIOSITY_ENABLED':'false',
             'MEMORIA_COMMIT':'ec817397b67ad0fadb3e1ec0b82e6a837869e0a1',
-            'BDR_COMMIT':'eb77ad7286f234243ca1ed1a2af2d55df8c12238',
+            'BDR_COMMIT':'1d507ae04f78d576246473d114dad58848b425d3',
           }
           lines=p.read_text().splitlines(); out=[]; seen=set()
           for line in lines:
@@ -102,7 +102,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "b17657a581060f0b5badeeb39f62b91f84e508ff"
           grep -q '^MEMORIA_COMMIT=bae11593f2c64bdb63fce84100213c16f88ca796$' .env
-          grep -q '^BDR_COMMIT=eb77ad7286f234243ca1ed1a2af2d55df8c12238$' .env
+          grep -q '^BDR_COMMIT=1d507ae04f78d576246473d114dad58848b425d3$' .env
           docker compose exec -T memoria python - <<'PY'
           import json, os
           from urllib.request import Request, urlopen
@@ -143,7 +143,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "4c1be255130a5775ae9c6bfefe7a486cdc6a8c86"
           grep -q '^MEMORIA_COMMIT=ec817397b67ad0fadb3e1ec0b82e6a837869e0a1$' .env
-          grep -q '^BDR_COMMIT=eb77ad7286f234243ca1ed1a2af2d55df8c12238$' .env
+          grep -q '^BDR_COMMIT=1d507ae04f78d576246473d114dad58848b425d3$' .env
           docker compose exec -T memoria python - <<'PY'
           import json, os
           from urllib.request import Request, urlopen
