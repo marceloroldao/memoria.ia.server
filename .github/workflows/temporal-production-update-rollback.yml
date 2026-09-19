@@ -84,6 +84,30 @@ jobs:
           assert len(rows)==300, len(rows)
           print('OLD_ROWS',len(rows))
           PY
+          docker compose exec -T memoria python - <<'PY'
+          from pathlib import Path
+          import struct
+          p=Path('/data/native-runtime/atomic.bdw4')
+          b=p.read_bytes()
+          pos=0; frames=[]
+          while pos < len(b):
+              if len(b)-pos < 24: break
+              total=struct.unpack('>I',b[pos:pos+4])[0]
+              if total < 28 or pos+total > len(b): break
+              magic=b[pos+4:pos+8]
+              version=struct.unpack('>I',b[pos+8:pos+12])[0]
+              seq=struct.unpack('>Q',b[pos+12:pos+20])[0]
+              count=struct.unpack('>I',b[pos+20:pos+24])[0]
+              frames.append((len(frames),pos,total,magic.decode('ascii','replace'),version,seq,count))
+              pos += total
+          print('OLD_BDW4_BYTES',len(b))
+          print('OLD_BDW4_FRAMES',len(frames))
+          print('OLD_BDW4_HEAD',frames[:12])
+          dup=[(a,b) for a,b in zip(frames,frames[1:]) if b[5] != a[5]+1]
+          print('OLD_BDW4_GAPS',dup[:12])
+          assert len(frames) >= 2
+          assert frames[0][5] == 1 and frames[1][5] == 1, frames[:2]
+          PY
           docker compose exec -T server python - <<'PY'
           from pathlib import Path
           Path('/data/rollback-marker.txt').write_text('before-upgrade',encoding='utf-8')
