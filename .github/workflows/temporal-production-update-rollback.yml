@@ -131,7 +131,7 @@ jobs:
           import json, os
           from urllib.request import Request, urlopen
           key=os.environ['MEMORIA_API_KEY']
-          with urlopen(Request('http://127.0.0.1:8080/api/v1/episodes/page?offset=250&limit=50',headers={'X-Memoria-Key':key}),timeout=10) as r:
+          with urlopen(Request('http://127.0.0.1:8080/api/v1/episodes/history?limit=5000',headers={'X-Memoria-Key':key}),timeout=10) as r:
               page=json.load(r)
           assert page['total']==300, page
           assert page['returned']==50, page
