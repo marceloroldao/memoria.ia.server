@@ -42,11 +42,25 @@ class LiveMemoriaSnapshotProvider:
             raise ValueError("offset must be non-negative")
         if requested < 1 or requested > self.max_limit:
             raise ValueError(f"limit must be between 1 and {self.max_limit}")
-        payload = self._json_get(f"/api/v1/episodes/page?offset={offset}&limit={requested}")
-        episodes = payload.get("episodes")
-        if not isinstance(episodes, list):
-            raise RuntimeError("Memoria.ia returned invalid episode page")
-        return payload
+        # Memoria.ia RC7 exposes the authoritative bounded history contract.
+        # Keep pagination inside the read-only Explorer adapter so deployment
+        # does not depend on a non-existent /episodes/page endpoint.
+        payload = self._json_get("/api/v1/episodes/history?limit=5000")
+        all_episodes = payload.get("episodes")
+        if not isinstance(all_episodes, list):
+            raise RuntimeError("Memoria.ia returned invalid episode history")
+        total = len(all_episodes)
+        episodes = all_episodes[offset : offset + requested]
+        next_offset = offset + len(episodes)
+        return {
+            "schema": "memoria-episode-page/v1",
+            "offset": offset,
+            "limit": requested,
+            "returned": len(episodes),
+            "total": total,
+            "next_offset": next_offset if next_offset < total else None,
+            "episodes": episodes,
+        }
 
     @staticmethod
     def _node_key(episode: dict[str, object], index: int) -> str:
