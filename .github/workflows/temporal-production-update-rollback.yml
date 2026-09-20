@@ -126,7 +126,7 @@ jobs:
 
       - name: Validate upgraded state preserves all 300 rows
         run: |
-          test "$(git rev-parse HEAD)" = "7561baaa5d6f18caac8c62db8ed168356279fba1"
+          test "$(git rev-parse HEAD)" = "f29a93870aaa431d7c4794f2952e84f473d18cdc"
           grep -q '^MEMORIA_COMMIT=80f2a0d33ccaa573af28ac23b9cb828d89daf64a$' .env
           grep -q '^BDR_COMMIT=5b41487031f1f3d0a3daeaf03f5d7cb6bceebfe1$' .env
           docker compose exec -T memoria python - <<'PY'
@@ -196,6 +196,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker compose down -v || true
+
 
 
 
