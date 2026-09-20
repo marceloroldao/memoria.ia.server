@@ -4,7 +4,7 @@ set -Eeuo pipefail
 PROJECT="${MEMORIA_SERVER_DIR:-$HOME/memoria.ia.server}"
 TARGET_SERVER="ea6cb2adc7124df0eaef5cdab76568525beca6d7"
 TARGET_MEMORIA="bae11593f2c64bdb63fce84100213c16f88ca796"
-TARGET_BDR="d11926da38f2f2d389dee44db277223bedc315d1"
+TARGET_BDR="5b41487031f1f3d0a3daeaf03f5d7cb6bceebfe1"
 BACKUP_ROOT="${MEMORIA_BACKUP_ROOT:-$HOME/memoria.ia.backups}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP="$BACKUP_ROOT/temporal-explorer-$STAMP"
