@@ -2,7 +2,9 @@ name: Temporal production update and rollback
 
 on:
   push:
-    branches: [deploy/temporal-explorer-production]
+    branches:
+      - deploy/temporal-explorer-production
+      - deploy/bdr-v1.2.0-rc3-production-gate
     paths:
       - 'deploy/update-temporal-explorer-production.sh'
       - '.github/workflows/temporal-production-update-rollback.yml'
