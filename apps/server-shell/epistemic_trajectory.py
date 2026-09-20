@@ -48,4 +48,6 @@ class EpistemicTrajectoryStore:
             if not item:return None
             item["status"]="closed"; item["closed_at"]=time.time(); item["close_reason"]=reason; self.state["closed"][item["trajectory_id"]]=item; self.state["stats"]["closed"]+=1; self._append({"kind":"trajectory_closed",**item}); self._save(); return item
     def snapshot(self):
-        with self._lock:return {"version":self.state["version"],"stats":dict(self.state["stats"]),"active":list(self.state["active"].values())[-20:],"closed_count":len(self.state["closed"])}
+        with self._lock:
+            closed=sorted(self.state["closed"].values(),key=lambda x:float(x.get("closed_at") or x.get("updated_at") or 0))[-100:]
+            return {"version":self.state["version"],"stats":dict(self.state["stats"]),"active":list(self.state["active"].values())[-20:],"closed":closed,"closed_count":len(self.state["closed"])}
