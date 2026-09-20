@@ -1,0 +1,43 @@
+name: V2 server RC1 freeze installer validation
+
+on:
+  pull_request:
+    paths:
+      - "deploy/update-v2-server-rc1-freeze.sh"
+      - ".github/workflows/v2-server-rc1-freeze-installer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate shell syntax
+        run: bash -n deploy/update-v2-server-rc1-freeze.sh
+
+      - name: Validate immutable pins
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          script=deploy/update-v2-server-rc1-freeze.sh
+          grep -q 'TARGET_SERVER="f29a93870aaa431d7c4794f2952e84f473d18cdc"' "$script"
+          grep -q 'TARGET_MEMORIA="61c4860924bfdaaf932833d0e95a09ec016538ae"' "$script"
+          grep -q 'TARGET_BDR="5b41487031f1f3d0a3daeaf03f5d7cb6bceebfe1"' "$script"
+
+      - name: Verify Memoria freeze ref exactly
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          actual="$(git ls-remote https://github.com/marceloroldao/memoria.ia.git refs/heads/freeze/v2-server-rc1 | awk '{print $1}')"
+          test "$actual" = "61c4860924bfdaaf932833d0e95a09ec016538ae"
+
+      - name: Verify BDR RC3 ref exactly
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          actual="$(git ls-remote https://github.com/marceloroldao/resolutive-DB.git 'refs/tags/v1.2.0-rc3^{}' | awk '{print $1}')"
+          test "$actual" = "5b41487031f1f3d0a3daeaf03f5d7cb6bceebfe1"
