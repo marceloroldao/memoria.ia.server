@@ -39,5 +39,5 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          actual="$(git ls-remote https://github.com/marceloroldao/resolutive-DB.git refs/tags/v1.2.0-rc3 | awk '{print $1}')"
+          actual="$(git ls-remote https://github.com/marceloroldao/resolutive-DB.git 'refs/tags/v1.2.0-rc3^{}' | awk '{print $1}')"
           test "$actual" = "5b41487031f1f3d0a3daeaf03f5d7cb6bceebfe1"
