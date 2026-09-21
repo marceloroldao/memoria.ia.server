@@ -149,7 +149,7 @@ services:
       - "${MEMORIA_SERVER_PORT:-8780}:8780"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8780/api/server/v1/health', timeout=3).read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8780/api/server/v1/ready', timeout=3).read()"]
       interval: 30s
       timeout: 5s
       start_period: 10s
