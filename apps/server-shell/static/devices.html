@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dispositivos · Memoria.ia Server</title>
+  <link rel="stylesheet" href="/shell.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand brand-link" href="/">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div><strong>Memoria.ia Server</strong><span>registro de dispositivos</span></div>
+    </a>
+    <div class="top-actions">
+      <button id="refreshDevices" class="logout" type="button">Atualizar</button>
+      <button id="logout" class="logout" type="button">Sair</button>
+    </div>
+  </header>
+
+  <main class="device-page">
+    <section class="intro compact">
+      <p class="eyebrow">DEVICE REGISTRY V1</p>
+      <h1>Nós administrados pelo servidor.</h1>
+      <p>OFF.IAs, computadores, servidores, robôs, sensores e IoT ficam registrados no <strong>server-data</strong>. Esta camada não grava memória semântica nem altera a Memoria.ia.</p>
+      <p class="server-id">Servidor: <code id="serverId">carregando…</code></p>
+    </section>
+
+    <section id="deviceStats" class="device-stats" aria-label="Resumo de dispositivos"></section>
+
+    <section class="device-layout">
+      <article class="device-panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">CADASTRO</p><h2>Novo dispositivo</h2></div>
+        </div>
+        <form id="registerDevice" class="device-form">
+          <label>Nome<input id="deviceName" required maxlength="160" placeholder="Ex.: OFF.IA Marcelo"></label>
+          <label>Tipo
+            <select id="deviceType">
+              <option value="offia">OFF.IA</option>
+              <option value="phone">Celular</option>
+              <option value="computer">Computador</option>
+              <option value="server">Servidor</option>
+              <option value="robot">Robô</option>
+              <option value="sensor">Sensor</option>
+              <option value="iot">IoT</option>
+            </select>
+          </label>
+          <label class="span-2">Chave pública<textarea id="devicePublicKey" required rows="3" placeholder="Chave pública do dispositivo"></textarea></label>
+          <label>CPU<input id="deviceCpu" placeholder="Ex.: arm64 / x86_64"></label>
+          <label>Modelo local<input id="deviceModel" placeholder="Ex.: qwen-local"></label>
+          <button class="primary-action span-2" type="submit">Registrar como pendente</button>
+          <p id="registerMessage" class="form-message span-2" aria-live="polite"></p>
+        </form>
+      </article>
+
+      <article class="device-panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">AUDITORIA</p><h2>Eventos recentes</h2></div>
+        </div>
+        <div id="auditList" class="audit-list"><p class="muted">carregando…</p></div>
+      </article>
+    </section>
+
+    <section class="device-panel device-table-panel">
+      <div class="panel-head">
+        <div><p class="eyebrow">NÓS</p><h2>Dispositivos registrados</h2></div>
+        <label class="filter-label">Estado
+          <select id="statusFilter">
+            <option value="">Todos</option>
+            <option value="pending">Pendente</option>
+            <option value="active">Ativo</option>
+            <option value="suspended">Suspenso</option>
+            <option value="revoked">Revogado</option>
+          </select>
+        </label>
+      </div>
+      <div class="table-wrap">
+        <table class="device-table">
+          <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Estado</th><th>Último contato</th><th>Capacidades</th><th>Ações</th></tr></thead>
+          <tbody id="deviceRows"><tr><td colspan="6">carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>Device Registry V1 · dados operacionais do servidor · sem dependência de memória semântica</footer>
+  <script src="/devices.js"></script>
+</body>
+</html>
