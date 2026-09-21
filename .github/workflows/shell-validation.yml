@@ -33,7 +33,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: python -m pip install pytest
+      - run: python -m pip install pytest -r apps/server-shell/requirements.txt
       - run: python -m pytest apps/server-shell/tests -q
       - run: python -m pytest apps/model-gateway/tests -q
       - run: python -m compileall -q apps/server-shell apps/bdr-explorer/explorer
