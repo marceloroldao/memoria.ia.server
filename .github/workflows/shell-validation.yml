@@ -9,6 +9,7 @@ on:
       - "docker/model-gateway/**"
       - "compose.yaml"
       - "apps/bdr-explorer/explorer/static/**"
+      - "deploy/*.sh"
       - ".github/workflows/shell-validation.yml"
   pull_request:
     paths:
@@ -18,6 +19,8 @@ on:
       - "docker/model-gateway/**"
       - "compose.yaml"
       - "apps/bdr-explorer/explorer/static/**"
+      - "deploy/*.sh"
+      - ".github/workflows/shell-validation.yml"
 
 permissions:
   contents: read
@@ -42,4 +45,5 @@ jobs:
       - run: node --check apps/server-shell/static/devices.js
       - run: node --check apps/memoria-admin/static/app.js
       - run: node --check apps/bdr-explorer/explorer/static/app.js
+      - run: bash -n deploy/check-server-ops-v1.sh deploy/update-server-ops-v1.sh
       - run: docker compose config --quiet
