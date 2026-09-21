@@ -130,12 +130,18 @@ class ShellHandler(BaseHTTPRequestHandler):
         try:
             with urlopen(Request(b+p,method="GET"),timeout=min(self.config.proxy_timeout_seconds,3.0)) as r:return {"status":"online" if r.status<400 else "degraded","code":r.status}
         except Exception:return {"status":"offline"}
-    def _health(self):
+    def _health_payload(self):
         m=self._component_health(self.config.memoria_api_url,"/api/v1/health");b=self._component_health(self.config.bdr_explorer_url,"/api/health");g=self._component_health(self.config.model_gateway_url,"/health");states={m["status"],b["status"],g["status"]};k=self.knowledge.recent(limit=1)
-        self._write_json(200,{"schema":"memoria-server-health/v1","status":"online" if states=={"online"} else "degraded","shell":{"status":"online","server_id":self.identity.snapshot()["server_id"]},"curiosity":{"status":self.curiosity.state.status,"enabled":self.curiosity.state.enabled},"knowledge":{"concepts":k["concepts"],"observations":k["observations"],"storage":"bdr-canonical"},"devices":self.devices.stats(),"components":{"memoria":m,"bdr_explorer":b,"model_gateway":g}})
+        return {"schema":"memoria-server-health/v1","status":"online" if states=={"online"} else "degraded","shell":{"status":"online","server_id":self.identity.snapshot()["server_id"]},"curiosity":{"status":self.curiosity.state.status,"enabled":self.curiosity.state.enabled},"knowledge":{"concepts":k["concepts"],"observations":k["observations"],"storage":"bdr-canonical"},"devices":self.devices.stats(),"components":{"memoria":m,"bdr_explorer":b,"model_gateway":g}}
+    def _health(self):
+        self._write_json(200,self._health_payload())
+    def _ready(self):
+        payload=self._health_payload();ready=payload.get("status")=="online"
+        self._write_json(200 if ready else 503,{"schema":"memoria-server-readiness/v1","ready":ready,"status":payload.get("status"),"components":payload.get("components",{})})
     def _dispatch(self):
         p=urlsplit(self.path);path=p.path
         if path=="/api/server/v1/health":self._health();return
+        if path=="/api/server/v1/ready":self._ready();return
         if path=="/api/server/v1/login":self._login();return
         if self.device_auth.dispatch_public(self,path):return
         if self.enrollments.dispatch_public(self,path):return
