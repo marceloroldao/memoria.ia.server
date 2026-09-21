@@ -26,15 +26,20 @@ def rank_epistemic_targets(knowledge, *, limit: int = 12) -> list[dict[str, obje
     recent = knowledge.recent(limit=100)
     ranked: list[dict[str, object]] = []
     for item in recent.get("items", []):
-        if item.get("semantic_class") != "content":
+        observations = int(item.get("observations") or 0)
+        provider_diversity = len(item.get("providers") or {})
+        # A first observation remains addressable memory, but it is not promoted
+        # into a dedicated search target until experience reinforces it.
+        if observations < 2:
             continue
         ranked.append({
             "topic": str(item.get("label") or item.get("key") or ""),
             "key": str(item.get("key") or ""),
             "epistemic_need": epistemic_need(item),
             "confidence": float(item.get("confidence") or 0.0),
-            "observations": int(item.get("observations") or 0),
-            "provider_diversity": len(item.get("providers") or {}),
+            "observations": observations,
+            "provider_diversity": provider_diversity,
+            "reinforcement_ready": True,
             "relation_strength": _relation_strength(item),
         })
     ranked.sort(key=lambda x: (-float(x["epistemic_need"]), int(x["observations"]), str(x["topic"])))
