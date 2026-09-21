@@ -6,7 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY apps ./apps
 
-RUN useradd --create-home --uid 10003 server \
+RUN pip install --no-cache-dir -r apps/server-shell/requirements.txt \
+    && useradd --create-home --uid 10003 server \
     && mkdir -p /data/curiosity \
     && chown -R server:server /app /data
 USER server
