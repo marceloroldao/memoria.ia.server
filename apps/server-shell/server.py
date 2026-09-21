@@ -22,6 +22,7 @@ from knowledge_bdr import KnowledgeBDR
 from learning_worker import LearningWorker
 from server_knowledge import ServerKnowledge
 from site_ingest import SiteIngestManager
+from structural_ingest_status import StructuralIngestStatus
 APPS_DIR=Path(__file__).resolve().parents[1]; SHELL_STATIC=Path(__file__).with_name("static"); MEMORIA_STATIC=APPS_DIR/"memoria-admin"/"static"; BDR_STATIC=APPS_DIR/"bdr-explorer"/"explorer"/"static"
 HOP_BY_HOP_HEADERS={"connection","keep-alive","proxy-authenticate","proxy-authorization","te","trailers","transfer-encoding","upgrade"}
 def proxy_target(c,path):
@@ -63,9 +64,10 @@ def server_capabilities():
         "server_identity_v1":True,
         "explorer_temporal_v1":True,
         "format_bdr":True,
+        "bit_analyze_structural_ingest_v1":True,
     }
 class ShellHandler(BaseHTTPRequestHandler):
-    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; learner:LearningWorker; identity:ServerIdentity; audit:AuditLog; devices:DeviceRegistry; device_authority:DeviceAuthority; device_auth:DeviceAuthManager; enrollments:DeviceEnrollmentManager
+    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; learner:LearningWorker; structural_ingest:StructuralIngestStatus; identity:ServerIdentity; audit:AuditLog; devices:DeviceRegistry; device_authority:DeviceAuthority; device_auth:DeviceAuthManager; enrollments:DeviceEnrollmentManager
     episode_write_lock=Lock()
     def _session_token(self):
         raw=self.headers.get("Cookie")
