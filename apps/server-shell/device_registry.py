@@ -291,8 +291,11 @@ class DeviceRegistry:
             devices = self._state["devices"]
             assert isinstance(devices, dict)
             for existing in devices.values():
-                if isinstance(existing, dict) and existing.get("public_key_fingerprint") == fingerprint and existing.get("status") != "revoked":
-                    return dict(existing), False
+                if not isinstance(existing, dict) or existing.get("public_key_fingerprint") != fingerprint:
+                    continue
+                if existing.get("status") == "revoked":
+                    raise DeviceRegistryError(409, "public_key_revoked", "this public key belongs to a revoked device")
+                return dict(existing), False
 
             device_id = "dev-" + uuid4().hex
             record: dict[str, object] = {
