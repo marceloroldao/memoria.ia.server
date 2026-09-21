@@ -41,6 +41,7 @@ docker run --rm -i   -v "$MEMORIA_VOLUME:/data:ro"   --entrypoint python   "$SER
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import json
 import struct
 import zlib
@@ -72,6 +73,10 @@ for path in paths:
     compatible_last = 0
     legacy_head_duplicate = False
     compatible = True
+    anomalies = []
+    duplicate_count = 0
+    regression_count = 0
+    forward_gap_count = 0
     crc_valid_frames = 0
     operation_count_total = 0
 
@@ -137,18 +142,42 @@ for path in paths:
         operation_count_total += count
         sequences.append(sequence)
 
-        # Strict RC1 rule.
-        if sequence != strict_last + 1 and first_error is None:
-            # Do not stop parsing: report the first strict violation while still
-            # evaluating the narrowly bounded RC3 compatibility shape.
-            first_error = {
-                "frame":frame,
-                "offset":pos,
-                "reason":"strict_sequence_gap",
-                "previous_sequence":strict_last,
-                "sequence":sequence,
-                "expected":strict_last + 1,
-            }
+        # Strict RC1 rule plus a complete anomaly map. We intentionally
+        # report hashes/counts only; key/value payloads are never emitted.
+        if frame > 1:
+            delta = sequence - strict_last
+            if delta != 1:
+                if delta == 0:
+                    kind = "duplicate"
+                    duplicate_count += 1
+                elif delta < 0:
+                    kind = "regression"
+                    regression_count += 1
+                else:
+                    kind = "forward_gap"
+                    forward_gap_count += 1
+                anomaly = {
+                    "frame": frame,
+                    "offset": pos,
+                    "kind": kind,
+                    "previous_sequence": strict_last,
+                    "sequence": sequence,
+                    "expected": strict_last + 1,
+                    "delta": delta,
+                    "operation_count": count,
+                    "frame_sha256": hashlib.sha256(raw).hexdigest(),
+                }
+                if len(anomalies) < 128:
+                    anomalies.append(anomaly)
+                if first_error is None:
+                    first_error = {
+                        "frame":frame,
+                        "offset":pos,
+                        "reason":"strict_sequence_gap",
+                        "previous_sequence":strict_last,
+                        "sequence":sequence,
+                        "expected":strict_last + 1,
+                    }
         strict_last = sequence
 
         # RC3 bounded compatibility:
@@ -183,6 +212,10 @@ for path in paths:
         "operations_declared":operation_count_total,
         "sequence_head":seq_head,
         "sequence_tail":seq_tail,
+        "duplicate_count": duplicate_count,
+        "regression_count": regression_count,
+        "forward_gap_count": forward_gap_count,
+        "anomalies": anomalies,
         "strict_rc1_valid":first_error is None,
         "first_strict_or_structural_error":first_error,
         "legacy_head_duplicate_1_1":legacy_head_duplicate,
