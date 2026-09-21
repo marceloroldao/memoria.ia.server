@@ -16,13 +16,6 @@ STOP = {
     "this","that","www","http","https","sobre","entre","into","pela","pelo","ser","são","foi","sua","seu",
     "também","todas","todos","cada","onde","quando","muito","muita","muitos","muitas",
 }
-WIKI_UI_NOISE = {
-    "editar","edição","página","páginas","wikipédia","enciclopédia","código","barra","barras","criar","busca",
-    "mensagem","imagem","imagens","informação","internacional","displaystyle","isbn","esboço","categoria","portal",
-    "discussão","referências","ligações","externas","navegação","conteúdo","artigo","artigos",
-}
-
-
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -44,10 +37,9 @@ def _normalize_terms(terms: list[str]) -> list[str]:
 
 
 def _semantic_weight(term: str, provider: str) -> tuple[float, str]:
-    # Nothing is discarded after it becomes an addressable symbol. We only
-    # annotate how useful it is for semantic resolution in the current context.
-    if provider == "wikipedia" and term in WIKI_UI_NOISE:
-        return 0.08, "interface_noise"
+    # No provider- or vocabulary-specific semantic suppression is applied.
+    # Repetition, source diversity and relations are learned from observations.
+    (term, provider)
     return 1.0, "content"
 
 
@@ -137,11 +129,8 @@ class ServerKnowledge:
                     )
                     self.items[term] = item
                 else:
-                    # A term first seen as UI noise can later become real content
-                    # in another context. Keep the strongest observed semantics.
-                    if weight > item.semantic_weight:
-                        item.semantic_weight = weight
-                        item.semantic_class = semantic_class
+                    item.semantic_weight = weight
+                    item.semantic_class = semantic_class
                 item.observations += 1
                 item.last_seen_at = now
                 item.providers[provider] = item.providers.get(provider, 0) + 1
