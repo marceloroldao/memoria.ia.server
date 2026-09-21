@@ -2,12 +2,12 @@
 from __future__ import annotations
 import json, time
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, RLock, Thread
 
 class LearningWorker:
     def __init__(self, knowledge, curiosity_data_dir: str, bdr=None, feedback=None, poll_seconds: float=2.0, max_evidence_per_cycle: int=5) -> None:
         self.knowledge=knowledge; self.bdr=bdr; self.feedback=feedback; self.events_file=Path(curiosity_data_dir)/"events.jsonl"; self.cursor_file=Path(curiosity_data_dir)/"knowledge.cursor"
-        self.poll_seconds=max(.5,poll_seconds); self.max_evidence_per_cycle=max(1,int(max_evidence_per_cycle)); self._stop=Event(); self._thread=Thread(target=self._loop,daemon=True,name="server-learning-worker"); self.offset=self._load_cursor()
+        self.poll_seconds=max(.5,poll_seconds); self.max_evidence_per_cycle=max(1,int(max_evidence_per_cycle)); self._stop=Event(); self._thread=Thread(target=self._loop,daemon=True,name="server-learning-worker"); self._cycle_lock=RLock(); self.offset=self._load_cursor()
         self.processed_evidence=0; self.learned_symbols=0; self.persistence_failures=0; self.consecutive_failures=0; self.feedback_failures=0; self.last_error=None; self.last_success_at=None; self.last_cycle_ms=0.0
     def _load_cursor(self):
         try:return max(0,int(self.cursor_file.read_text(encoding="utf-8").strip()))
@@ -29,29 +29,38 @@ class LearningWorker:
         if self.feedback is None:return
         try:self.feedback(event,result)
         except Exception as exc:self.feedback_failures+=1; print(f"[learning] feedback error: {exc}")
+    def format_guard(self):
+        return self._cycle_lock
+    def reset_after_format(self):
+        with self._cycle_lock:
+            self.offset=0; self._save_cursor(); self.processed_evidence=0; self.learned_symbols=0
+            self.persistence_failures=0; self.consecutive_failures=0; self.feedback_failures=0
+            self.last_error=None; self.last_success_at=None; self.last_cycle_ms=0.0
+            return {"learning_cursor_reset":True}
     def cycle_once(self):
-        started=time.monotonic()
-        if not self.events_file.exists():return 0
-        size=self.events_file.stat().st_size
-        if self.offset>size:self.offset=0
-        learned=0; processed=0
-        with self.events_file.open("r",encoding="utf-8") as fh:
-            fh.seek(self.offset)
-            while processed<self.max_evidence_per_cycle:
-                line=fh.readline()
-                if not line:break
-                next_offset=fh.tell()
-                try:event=json.loads(line)
-                except json.JSONDecodeError:self.offset=next_offset; continue
-                if event.get("kind")!="evidence":self.offset=next_offset; continue
-                try:
-                    if self.bdr is not None:self.bdr.append_evidence(event)
-                except Exception as exc:
-                    self.persistence_failures+=1; self.consecutive_failures+=1; self.last_error=str(exc); self.last_cycle_ms=round((time.monotonic()-started)*1000,1); raise
-                result=self.knowledge.learn_from_evidence(event); self.offset=next_offset; processed+=1; self.processed_evidence+=1; self.consecutive_failures=0; self.last_error=None; self.last_success_at=time.time(); self._emit_feedback(event,result)
-                if result.get("learned"):
-                    count=int(result["learned"]); learned+=count; self.learned_symbols+=count; print(f"[learning] BDR+knowledge -> {count} conceito(s): {', '.join(result['keys'][:5])}")
-        self._save_cursor(); self.last_cycle_ms=round((time.monotonic()-started)*1000,1); return learned
+        with self._cycle_lock:
+            started=time.monotonic()
+            if not self.events_file.exists():return 0
+            size=self.events_file.stat().st_size
+            if self.offset>size:self.offset=0
+            learned=0; processed=0
+            with self.events_file.open("r",encoding="utf-8") as fh:
+                fh.seek(self.offset)
+                while processed<self.max_evidence_per_cycle:
+                    line=fh.readline()
+                    if not line:break
+                    next_offset=fh.tell()
+                    try:event=json.loads(line)
+                    except json.JSONDecodeError:self.offset=next_offset; continue
+                    if event.get("kind")!="evidence":self.offset=next_offset; continue
+                    try:
+                        if self.bdr is not None:self.bdr.append_evidence(event)
+                    except Exception as exc:
+                        self.persistence_failures+=1; self.consecutive_failures+=1; self.last_error=str(exc); self.last_cycle_ms=round((time.monotonic()-started)*1000,1); raise
+                    result=self.knowledge.learn_from_evidence(event); self.offset=next_offset; processed+=1; self.processed_evidence+=1; self.consecutive_failures=0; self.last_error=None; self.last_success_at=time.time(); self._emit_feedback(event,result)
+                    if result.get("learned"):
+                        count=int(result["learned"]); learned+=count; self.learned_symbols+=count; print(f"[learning] BDR+knowledge -> {count} conceito(s): {', '.join(result['keys'][:5])}")
+            self._save_cursor(); self.last_cycle_ms=round((time.monotonic()-started)*1000,1); return learned
     def _retry_delay(self):
         return self.poll_seconds if not self.consecutive_failures else min(60.0,self.poll_seconds*(2**min(self.consecutive_failures,5)))
     def _loop(self):
