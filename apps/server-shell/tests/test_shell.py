@@ -56,5 +56,7 @@ def test_server_owned_static_routes_include_devices_and_admin_diagnostics_fix():
 def test_server_capabilities_do_not_advertise_unimplemented_bdr_format():
     capabilities = server_capabilities()
     assert capabilities["device_registry_v1"] is True
+    assert capabilities["device_auth_v1"] is True
+    assert capabilities["device_certificates_v1"] is True
     assert capabilities["audit_log_v1"] is True
     assert capabilities["format_bdr"] is False
