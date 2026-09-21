@@ -46,6 +46,26 @@ Estado: concluída
 
 ## Etapa 1 — Registro interno de dispositivos
 
+Estado: em implementação — Device Registry V1 disponível no Server.
+
+Já implementado no V1:
+- identidade persistente do servidor (`server_id`);
+- registro local de dispositivos em `server-data`;
+- estados pendente, ativo, suspenso e revogado;
+- aprovação, suspensão, reativação e revogação;
+- heartbeat administrativo com `last_seen`;
+- capacidades e versões declaradas;
+- trilha de auditoria append-only;
+- interface administrativa em `/devices`.
+
+Pendente para concluir a etapa:
+- autenticação própria do dispositivo;
+- challenge-response;
+- certificado interno Ed25519 assinado pelo servidor;
+- rotação/revogação de chaves e escopos por dispositivo.
+
+Referência: [Device Registry V1](DEVICE-REGISTRY-V1.md).
+
 Objetivo: permitir que cada servidor administre seus próprios nós.
 
 - identidade única do servidor;
