@@ -13,6 +13,7 @@ from autonomous_tests import AutonomousTestManager
 from config import ShellConfig
 from device_registry import AUDIT_PATH, IDENTITY_PATH, AuditLog, DeviceRegistry, ServerIdentity
 from device_auth import DeviceAuthManager, DeviceAuthority
+from device_enrollment import DeviceEnrollmentManager
 from guided_curiosity import TrajectoryGuidedCuriosityEngine
 from epistemic_feedback import EpistemicFeedback
 from epistemic_trajectory import EpistemicTrajectoryStore
@@ -56,13 +57,15 @@ def server_capabilities():
         "device_heartbeat_v1":True,
         "device_auth_v1":True,
         "device_certificates_v1":True,
+        "device_permissions_v1":True,
+        "device_enrollment_v1":True,
         "audit_log_v1":True,
         "server_identity_v1":True,
         "explorer_temporal_v1":True,
         "format_bdr":False,
     }
 class ShellHandler(BaseHTTPRequestHandler):
-    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; identity:ServerIdentity; audit:AuditLog; devices:DeviceRegistry; device_authority:DeviceAuthority; device_auth:DeviceAuthManager
+    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; identity:ServerIdentity; audit:AuditLog; devices:DeviceRegistry; device_authority:DeviceAuthority; device_auth:DeviceAuthManager; enrollments:DeviceEnrollmentManager
     episode_write_lock=Lock()
     def _session_token(self):
         raw=self.headers.get("Cookie")
@@ -135,6 +138,7 @@ class ShellHandler(BaseHTTPRequestHandler):
         if path=="/api/server/v1/health":self._health();return
         if path=="/api/server/v1/login":self._login();return
         if self.device_auth.dispatch_public(self,path):return
+        if self.enrollments.dispatch_public(self,path):return
         if self.device_auth.dispatch_device(self,path):return
         ok=self.auth.verify(self._session_token())
         if path=="/login":self._redirect("/") if ok else self._serve_static(SHELL_STATIC/"login.html");return
@@ -152,6 +156,7 @@ class ShellHandler(BaseHTTPRequestHandler):
             try:limit=int((q.get("limit") or ["100"])[0])
             except ValueError:limit=100
             self._write_json(200,self.audit.recent(limit));return
+        if self.enrollments.dispatch_admin(self,path):return
         if self.devices.dispatch(self,path,q):return
         if path=="/api/server/v1/epistemic/trajectories":
             if self.command not in {"GET","HEAD"}:self._write_json(405,{"error":"method_not_allowed"},{"Allow":"GET, HEAD"});return
@@ -175,8 +180,8 @@ def main():
     if a.host:c=ShellConfig(**{**c.__dict__,"host":a.host})
     if a.port:c=ShellConfig(**{**c.__dict__,"port":a.port})
     if not c.admin_password:raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
-    ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.identity=ServerIdentity(c.server_data_dir);ShellHandler.audit=AuditLog(c.server_data_dir);ShellHandler.devices=DeviceRegistry(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.device_authority=DeviceAuthority(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.devices.set_certificate_issuer(ShellHandler.device_authority.issue_certificate);ShellHandler.device_auth=DeviceAuthManager(ShellHandler.devices,ShellHandler.device_authority,ShellHandler.audit);ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.trajectories=EpistemicTrajectoryStore(str(Path(c.curiosity_data_dir)/"trajectories"));ShellHandler.curiosity=TrajectoryGuidedCuriosityEngine(c,ShellHandler.knowledge,ShellHandler.trajectories);ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
-    kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir,trajectories=ShellHandler.trajectories);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Device Registry + Device Auth + Audit Log + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback + Epistemic Trajectories")
+    ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.identity=ServerIdentity(c.server_data_dir);ShellHandler.audit=AuditLog(c.server_data_dir);ShellHandler.devices=DeviceRegistry(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.device_authority=DeviceAuthority(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.devices.set_certificate_issuer(ShellHandler.device_authority.issue_certificate);ShellHandler.device_auth=DeviceAuthManager(ShellHandler.devices,ShellHandler.device_authority,ShellHandler.audit);ShellHandler.enrollments=DeviceEnrollmentManager(c.server_data_dir,ShellHandler.identity,ShellHandler.devices,ShellHandler.audit);ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.trajectories=EpistemicTrajectoryStore(str(Path(c.curiosity_data_dir)/"trajectories"));ShellHandler.curiosity=TrajectoryGuidedCuriosityEngine(c,ShellHandler.knowledge,ShellHandler.trajectories);ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
+    kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir,trajectories=ShellHandler.trajectories);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Device Registry + Device Enrollment + Device Auth + Audit Log + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback + Epistemic Trajectories")
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:learner.stop();ShellHandler.curiosity.stop();server.server_close()

@@ -65,12 +65,20 @@ Também implementado no Device Authentication V1:
 - suspensão/revogação invalidando autenticação imediatamente;
 - autoridade Ed25519 persistente e fail-closed.
 
+Também implementado no Enrollment & Permissions V1:
+- convites únicos persistidos sem segredo em texto claro;
+- claim público com chave Ed25519 gerada no dispositivo;
+- aprovação administrativa continua obrigatória;
+- escopos `device.self.read` e `device.heartbeat` efetivamente aplicados;
+- alteração de permissões com efeito imediato e reemissão de certificado;
+- base contratual para `memory.sync`, `model.*`, `ma2a.connect`, `telemetry.write` e `world.connect`.
+
 Pendente para concluir a etapa:
 - rotação controlada de chaves do servidor e do dispositivo;
-- escopos aplicados por endpoint;
-- fluxo de enrollment/convite para OFF.IA.
+- QR/discovery seguro para enrollment;
+- escopos dos módulos futuros aplicados quando suas rotas existirem.
 
-Referências: [Device Registry V1](DEVICE-REGISTRY-V1.md) e [Device Authentication V1](DEVICE-AUTH-V1.md).
+Referências: [Device Registry V1](DEVICE-REGISTRY-V1.md), [Device Authentication V1](DEVICE-AUTH-V1.md) e [Device Enrollment & Permissions V1](DEVICE-ENROLLMENT-PERMISSIONS-V1.md).
 
 Objetivo: permitir que cada servidor administre seus próprios nós.
 
@@ -304,9 +312,17 @@ Esta etapa não deve ser implementada antes de existirem segurança, medição v
 
 Objetivo: permitir que o provedor entregue a OFF.IA como serviço aos seus clientes.
 
+Base já disponível no Server:
+- convite de ativação one-time para dispositivo;
+- claim seguro com chave pública Ed25519;
+- associação do dispositivo ao `server_id`;
+- escopos definidos pelo provedor antes do claim;
+- aprovação/revogação administrativa e auditoria.
+
+Ainda falta a camada de cliente/assinante acima do dispositivo:
+
 - cadastro interno de clientes;
-- convites de ativação;
-- QR Code, link ou código curto;
+- QR Code, link ou código curto amigável;
 - descoberta segura do servidor;
 - identidade visual e suporte do provedor;
 - associação cliente–dispositivo–servidor;

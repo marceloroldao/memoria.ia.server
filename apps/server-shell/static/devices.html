@@ -29,6 +29,64 @@
 
     <section id="deviceStats" class="device-stats" aria-label="Resumo de dispositivos"></section>
 
+    <section class="device-layout enrollment-layout">
+      <article class="device-panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">ENROLLMENT V1</p><h2>Criar convite de ativação</h2></div>
+        </div>
+        <form id="createEnrollment" class="device-form">
+          <label>Identificação<input id="enrollmentLabel" maxlength="160" placeholder="Ex.: OFF.IA cliente 42"></label>
+          <label>Tipo
+            <select id="enrollmentType">
+              <option value="offia">OFF.IA</option>
+              <option value="phone">Celular</option>
+              <option value="computer">Computador</option>
+              <option value="server">Servidor</option>
+              <option value="robot">Robô</option>
+              <option value="sensor">Sensor</option>
+              <option value="iot">IoT</option>
+            </select>
+          </label>
+          <label>Validade
+            <select id="enrollmentExpires">
+              <option value="30">30 minutos</option>
+              <option value="60" selected>1 hora</option>
+              <option value="360">6 horas</option>
+              <option value="1440">24 horas</option>
+              <option value="10080">7 dias</option>
+            </select>
+          </label>
+          <label>Grupo<input id="enrollmentGroup" maxlength="128" placeholder="Ex.: cliente-42"></label>
+          <label class="span-2">Permissões do dispositivo
+            <select id="enrollmentPermissions" multiple size="8">
+              <option value="device.self.read" selected>device.self.read</option>
+              <option value="device.heartbeat" selected>device.heartbeat</option>
+              <option value="memory.sync">memory.sync</option>
+              <option value="model.local.use">model.local.use</option>
+              <option value="model.remote.use">model.remote.use</option>
+              <option value="ma2a.connect">ma2a.connect</option>
+              <option value="telemetry.write">telemetry.write</option>
+              <option value="world.connect">world.connect</option>
+            </select>
+          </label>
+          <button class="primary-action span-2" type="submit">Gerar convite único</button>
+          <p id="enrollmentMessage" class="form-message span-2" aria-live="polite"></p>
+          <div id="enrollmentSecretBox" class="secret-box span-2" hidden>
+            <span>O código abaixo aparece somente agora. Entregue-o ao dispositivo por canal seguro.</span>
+            <code id="enrollmentCode"></code>
+            <button id="copyEnrollmentCode" class="device-action" type="button">Copiar código</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="device-panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">CONVITES</p><h2>Enrollment pendente</h2></div>
+        </div>
+        <div id="enrollmentList" class="audit-list"><p class="muted">carregando…</p></div>
+      </article>
+    </section>
+
     <section class="device-layout">
       <article class="device-panel">
         <div class="panel-head">
@@ -78,8 +136,8 @@
       </div>
       <div class="table-wrap">
         <table class="device-table">
-          <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Estado</th><th>Certificado</th><th>Último contato</th><th>Capacidades</th><th>Ações</th></tr></thead>
-          <tbody id="deviceRows"><tr><td colspan="7">carregando…</td></tr></tbody>
+          <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Estado</th><th>Certificado</th><th>Permissões</th><th>Último contato</th><th>Capacidades</th><th>Ações</th></tr></thead>
+          <tbody id="deviceRows"><tr><td colspan="8">carregando…</td></tr></tbody>
         </table>
       </div>
     </section>

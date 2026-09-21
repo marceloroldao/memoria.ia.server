@@ -261,3 +261,50 @@ def test_challenge_rate_limit_is_bounded_to_known_device(tmp_path):
     else:
         raise AssertionError("unknown device challenge must fail")
     assert len(auth._challenge_rate) == before
+
+
+
+def test_permission_change_reissues_certificate_and_denies_removed_scope(tmp_path):
+    _identity, audit, registry, authority, auth = make_stack(tmp_path)
+    private, public_key = device_key()
+    device = register_active(registry, public_key)
+
+    challenge = auth.challenge(device["device_id"])
+    signature = private.sign(challenge["signing_message"].encode("utf-8"))
+    token = auth.verify(device["device_id"], challenge["challenge_id"], b64url(signature))["token"]
+
+    assert auth.authenticate(
+        "Device " + token,
+        required_permission="device.heartbeat",
+    ) == device["device_id"]
+
+    old_serial = registry.get(device["device_id"])["certificate"]["payload"]["serial"]
+    updated = registry.set_permissions(
+        device["device_id"],
+        ["device.self.read"],
+        actor="admin",
+    )
+    new_serial = updated["certificate"]["payload"]["serial"]
+    assert new_serial != old_serial
+    assert updated["permissions"] == ["device.self.read"]
+    assert authority.verify_device_certificate(updated["certificate"], updated) is True
+
+    assert auth.authenticate(
+        "Device " + token,
+        required_permission="device.self.read",
+    ) == device["device_id"]
+
+    try:
+        auth.authenticate(
+            "Device " + token,
+            required_permission="device.heartbeat",
+            client_ip="127.0.0.1",
+        )
+    except DeviceRegistryError as exc:
+        assert exc.status == 403
+        assert exc.code == "device_permission_denied"
+    else:
+        raise AssertionError("removed scope must be denied")
+
+    events = audit.recent(20)["events"]
+    assert any(event["action"] == "device.permission_denied" for event in events)
