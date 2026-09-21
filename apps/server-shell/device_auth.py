@@ -173,7 +173,11 @@ class DeviceAuthority:
         existing = device.get("certificate")
         if self._certificate_valid(existing, fingerprint, server_id):
             existing_payload = existing.get("payload") if isinstance(existing, dict) else None
-            if isinstance(existing_payload, dict) and existing_payload.get("device_id") == device.get("device_id"):
+            if (
+                isinstance(existing_payload, dict)
+                and existing_payload.get("device_id") == device.get("device_id")
+                and list(existing_payload.get("permissions") or []) == list(device.get("permissions") or [])
+            ):
                 return dict(existing)
 
         issued = datetime.now(timezone.utc)
@@ -229,6 +233,7 @@ class DeviceAuthority:
             and payload.get("device_id") == device.get("device_id")
             and payload.get("public_key_fingerprint") == device.get("public_key_fingerprint")
             and payload.get("server_id") == self.identity.snapshot()["server_id"]
+            and list(payload.get("permissions") or []) == list(device.get("permissions") or [])
         )
 
 class DeviceAuthManager:
@@ -383,7 +388,7 @@ class DeviceAuthManager:
             "device_id": device_id,
         }
 
-    def authenticate(self, authorization: str) -> str:
+    def authenticate(self, authorization: str, *, required_permission: str | None = None, client_ip: str | None = None) -> str:
         prefix = "Device "
         if not authorization.startswith(prefix):
             raise DeviceRegistryError(401, "device_auth_required", "Device authorization token required")
@@ -400,6 +405,18 @@ class DeviceAuthManager:
         device = self.registry.get(device_id)
         if device.get("status") != "active" or device.get("certificate_status") != "active":
             raise DeviceRegistryError(403, "device_not_active", "device is not active")
+        certificate = device.get("certificate")
+        if not self.authority.verify_device_certificate(certificate, device):
+            raise DeviceRegistryError(403, "certificate_not_active", "device certificate is stale or invalid")
+        if required_permission and required_permission not in set(device.get("permissions") or []):
+            self.audit.append(
+                "device.permission_denied",
+                actor=f"device:{device_id}",
+                target=device_id,
+                client_ip=client_ip,
+                details={"permission": required_permission},
+            )
+            raise DeviceRegistryError(403, "device_permission_denied", f"missing permission: {required_permission}")
         return device_id
 
     @staticmethod
@@ -451,7 +468,12 @@ class DeviceAuthManager:
             return False
         client_ip = handler.client_address[0] if getattr(handler, "client_address", None) else None
         try:
-            device_id = self.authenticate(handler.headers.get("Authorization", ""))
+            required_permission = "device.self.read" if path == DEVICE_SELF_PATH else "device.heartbeat"
+            device_id = self.authenticate(
+                handler.headers.get("Authorization", ""),
+                required_permission=required_permission,
+                client_ip=client_ip,
+            )
             if path == DEVICE_SELF_PATH:
                 if handler.command not in {"GET", "HEAD"}:
                     handler._write_json(405, {"error":"method_not_allowed"}, {"Allow":"GET, HEAD"})
