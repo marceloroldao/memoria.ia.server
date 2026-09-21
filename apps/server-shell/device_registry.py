@@ -112,8 +112,11 @@ class ServerIdentity:
         self._identity = self._load_or_create()
 
     def _load_or_create(self) -> dict[str, object]:
-        try:
-            payload = json.loads(self.path.read_text("utf-8"))
+        if self.path.exists():
+            try:
+                payload = json.loads(self.path.read_text("utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise RuntimeError("server identity state is unreadable") from exc
             if (
                 isinstance(payload, dict)
                 and payload.get("schema") == self.SCHEMA
@@ -121,8 +124,7 @@ class ServerIdentity:
                 and payload["server_id"]
             ):
                 return payload
-        except (OSError, json.JSONDecodeError):
-            pass
+            raise RuntimeError("server identity state is invalid")
         payload = {
             "schema": self.SCHEMA,
             "server_id": "srv-" + uuid4().hex,
@@ -149,15 +151,22 @@ class AuditLog:
     def _last_sequence(self) -> int:
         if not self.path.exists():
             return 0
-        last = ""
+        highest = 0
         try:
             with self.path.open("r", encoding="utf-8") as handle:
                 for line in handle:
-                    if line.strip():
-                        last = line
-            return int(json.loads(last).get("sequence") or 0) if last else 0
-        except Exception:
-            return 0
+                    if not line.strip():
+                        continue
+                    try:
+                        item = json.loads(line)
+                    except json.JSONDecodeError:
+                        # A torn final audit line must not reset sequence history.
+                        continue
+                    if isinstance(item, dict):
+                        highest = max(highest, int(item.get("sequence") or 0))
+            return highest
+        except OSError as exc:
+            raise RuntimeError("audit log is unreadable") from exc
 
     def append(
         self,
@@ -230,13 +239,15 @@ class DeviceRegistry:
         self._state = self._load()
 
     def _load(self) -> dict[str, object]:
+        if not self.path.exists():
+            return {"schema": self.SCHEMA, "updated_at": _now(), "devices": {}}
         try:
             payload = json.loads(self.path.read_text("utf-8"))
-            if isinstance(payload, dict) and payload.get("schema") == self.SCHEMA and isinstance(payload.get("devices"), dict):
-                return payload
-        except (OSError, json.JSONDecodeError):
-            pass
-        return {"schema": self.SCHEMA, "updated_at": _now(), "devices": {}}
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError("device registry state is unreadable") from exc
+        if isinstance(payload, dict) and payload.get("schema") == self.SCHEMA and isinstance(payload.get("devices"), dict):
+            return payload
+        raise RuntimeError("device registry state is invalid")
 
     def _save(self) -> None:
         self._state["updated_at"] = _now()
