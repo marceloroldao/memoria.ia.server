@@ -32,7 +32,7 @@ services:
       context: .
       dockerfile: docker/memoria/Dockerfile
       args:
-        MEMORIA_COMMIT: ${MEMORIA_COMMIT:-6303b8a643cf191ddfcc9e333383c5fd0c56788e}
+        MEMORIA_COMMIT: ${MEMORIA_COMMIT:-1c46bde4e9376002af5067320b9e3361843df33a}
         BDR_COMMIT: ${BDR_COMMIT:-d09914b85646353d8fd004ccf99e96a94fab9eef}
     environment:
       MEMORIA_ORGANIZATION_ID: ${MEMORIA_ORGANIZATION_ID}
