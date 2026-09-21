@@ -154,6 +154,7 @@ class DeviceAuthority:
         return bool(
             certificate.get("schema") == DeviceAuthority.CERT_SCHEMA
             and payload.get("server_id") == server_id
+            and payload.get("device_id")
             and payload.get("public_key_fingerprint") == fingerprint
             and expires
             and expires > datetime.now(timezone.utc)
@@ -170,7 +171,9 @@ class DeviceAuthority:
         fingerprint = str(device.get("public_key_fingerprint") or "")
         existing = device.get("certificate")
         if self._certificate_valid(existing, fingerprint, server_id):
-            return dict(existing)
+            existing_payload = existing.get("payload") if isinstance(existing, dict) else None
+            if isinstance(existing_payload, dict) and existing_payload.get("device_id") == device.get("device_id"):
+                return dict(existing)
 
         issued = datetime.now(timezone.utc)
         payload = {
@@ -206,7 +209,7 @@ class DeviceAuthority:
             if certificate.get("issuer_public_key") != self._public_text:
                 return False
             payload = certificate.get("payload")
-            if not isinstance(payload, dict):
+            if not isinstance(payload, dict) or payload.get("server_id") != self.identity.snapshot()["server_id"]:
                 return False
             signature = _b64decode(str(certificate.get("signature") or ""))
             self._private_key.public_key().verify(signature, _canonical(payload))
@@ -215,6 +218,17 @@ class DeviceAuthority:
         except (InvalidSignature, DeviceRegistryError, ValueError, TypeError):
             return False
 
+
+    def verify_device_certificate(self, certificate: object, device: dict[str, object]) -> bool:
+        if not isinstance(certificate, dict) or not self.verify_certificate(certificate):
+            return False
+        payload = certificate.get("payload")
+        return bool(
+            isinstance(payload, dict)
+            and payload.get("device_id") == device.get("device_id")
+            and payload.get("public_key_fingerprint") == device.get("public_key_fingerprint")
+            and payload.get("server_id") == self.identity.snapshot()["server_id"]
+        )
 
 class DeviceAuthManager:
     CHALLENGE_SCHEMA = "memoria-server-device-challenge/v1"
@@ -258,7 +272,7 @@ class DeviceAuthManager:
         if device.get("status") != "active":
             raise DeviceRegistryError(403, "device_not_active", "device must be active")
         certificate = device.get("certificate")
-        if device.get("certificate_status") != "active" or not isinstance(certificate, dict) or not self.authority.verify_certificate(certificate):
+        if device.get("certificate_status") != "active" or not self.authority.verify_device_certificate(certificate, device):
             raise DeviceRegistryError(403, "certificate_not_active", "device does not have an active server certificate")
         challenge_id = "chl-" + uuid4().hex
         nonce = _b64encode(secrets.token_bytes(32))
@@ -308,7 +322,7 @@ class DeviceAuthManager:
         if device.get("status") != "active":
             raise DeviceRegistryError(403, "device_not_active", "device must be active")
         certificate = device.get("certificate")
-        if device.get("certificate_status") != "active" or not isinstance(certificate, dict) or not self.authority.verify_certificate(certificate):
+        if device.get("certificate_status") != "active" or not self.authority.verify_device_certificate(certificate, device):
             raise DeviceRegistryError(403, "certificate_not_active", "device certificate is not active")
 
         public_key = parse_ed25519_public_key(str(device.get("public_key") or ""))
@@ -329,9 +343,17 @@ class DeviceAuthManager:
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
         with self._lock:
             self._cleanup()
+            same_device = [
+                (key, value) for key, value in self._tokens.items()
+                if value.get("device_id") == device_id
+            ]
+            same_device.sort(key=lambda pair: float(pair[1].get("issued_mono") or 0.0))
+            for key, _value in same_device[:-3]:
+                self._tokens.pop(key, None)
             self._tokens[token_hash] = {
                 "device_id": device_id,
                 "expires_mono": time.monotonic() + self.token_seconds,
+                "issued_mono": time.monotonic(),
                 "issued_at": _now(),
             }
         self.audit.append("device.auth_success", actor=f"device:{device_id}", target=device_id, client_ip=client_ip)
