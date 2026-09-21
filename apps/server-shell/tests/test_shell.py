@@ -62,3 +62,43 @@ def test_server_capabilities_do_not_advertise_unimplemented_bdr_format():
     assert capabilities["device_enrollment_v1"] is True
     assert capabilities["audit_log_v1"] is True
     assert capabilities["format_bdr"] is False
+
+
+
+def test_server_ready_returns_503_when_any_dependency_is_degraded():
+    handler = object.__new__(__import__("server").ShellHandler)
+    captured = {}
+    handler._health_payload = lambda: {
+        "status": "degraded",
+        "components": {
+            "memoria": {"status": "offline"},
+            "bdr_explorer": {"status": "online"},
+            "model_gateway": {"status": "online"},
+        },
+    }
+    handler._write_json = lambda status, payload: captured.update(status=status, payload=payload)
+
+    __import__("server").ShellHandler._ready(handler)
+
+    assert captured["status"] == 503
+    assert captured["payload"]["ready"] is False
+    assert captured["payload"]["components"]["memoria"]["status"] == "offline"
+
+
+def test_server_ready_returns_200_when_all_dependencies_are_online():
+    handler = object.__new__(__import__("server").ShellHandler)
+    captured = {}
+    handler._health_payload = lambda: {
+        "status": "online",
+        "components": {
+            "memoria": {"status": "online"},
+            "bdr_explorer": {"status": "online"},
+            "model_gateway": {"status": "online"},
+        },
+    }
+    handler._write_json = lambda status, payload: captured.update(status=status, payload=payload)
+
+    __import__("server").ShellHandler._ready(handler)
+
+    assert captured["status"] == 200
+    assert captured["payload"]["ready"] is True
