@@ -133,3 +133,19 @@ def test_invalid_device_type_is_rejected(tmp_path):
         assert exc.code == "invalid_type"
     else:
         raise AssertionError("invalid type must fail")
+
+
+
+def test_revoked_public_key_cannot_register_again(tmp_path):
+    _identity, _audit, registry = make_registry(tmp_path)
+    device, _ = registry.register(payload(), actor="admin")
+    registry.approve(device["device_id"], actor="admin")
+    registry.revoke(device["device_id"], actor="admin")
+
+    try:
+        registry.register(payload("Tentativa reutilizada"), actor="admin")
+    except DeviceRegistryError as exc:
+        assert exc.status == 409
+        assert exc.code == "public_key_revoked"
+    else:
+        raise AssertionError("revoked public key must remain blocked")
