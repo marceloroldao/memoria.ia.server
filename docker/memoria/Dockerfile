@@ -1,7 +1,7 @@
 FROM alpine:3.20 AS source
 
 RUN apk add --no-cache git ca-certificates
-ARG MEMORIA_COMMIT=6303b8a643cf191ddfcc9e333383c5fd0c56788e
+ARG MEMORIA_COMMIT=1c46bde4e9376002af5067320b9e3361843df33a
 RUN git init /source && \
     git -C /source remote add origin https://github.com/marceloroldao/memoria.ia.git && \
     git -C /source fetch --depth 1 origin "${MEMORIA_COMMIT}" && \
