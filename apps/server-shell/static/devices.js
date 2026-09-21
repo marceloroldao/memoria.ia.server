@@ -67,7 +67,7 @@ function renderDevices(devices) {
   if (!devices.length) {
     const tr = document.createElement("tr");
     const td = el("td", "Nenhum dispositivo neste filtro.", "muted");
-    td.colSpan = 6;
+    td.colSpan = 7;
     tr.append(td); rows.append(tr); return;
   }
   for (const device of devices) {
@@ -78,6 +78,8 @@ function renderDevices(devices) {
     const type = el("td", device.type);
     const status = document.createElement("td");
     status.append(el("span", statusLabel(device.status), `status-chip ${device.status}`));
+    const certificate = document.createElement("td");
+    certificate.append(el("span", device.certificate_status || "not_issued", `status-chip ${device.certificate_status || "pending"}`));
     const seen = el("td", formatTime(device.last_seen));
     const caps = document.createElement("td");
     const cap = device.capabilities || {};
@@ -92,7 +94,7 @@ function renderDevices(devices) {
       actions.append(actionButton("Suspender", "suspend", device.device_id));
     }
     if (device.status !== "revoked") actions.append(actionButton("Revogar", "revoke", device.device_id, "danger"));
-    tr.append(identity, type, status, seen, caps, actions);
+    tr.append(identity, type, status, certificate, seen, caps, actions);
     rows.append(tr);
   }
 }
@@ -116,12 +118,14 @@ function renderAudit(events) {
 async function refreshAll() {
   const status = $("statusFilter").value;
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
-  const [identity, devices, audit] = await Promise.all([
+  const [identity, authority, devices, audit] = await Promise.all([
     api("/api/server/v1/server/identity"),
+    api("/api/server/v1/device-auth/authority"),
     api("/api/server/v1/devices" + query),
     api("/api/server/v1/audit?limit=30"),
   ]);
   $("serverId").textContent = identity.server_id;
+  $("authorityFingerprint").textContent = authority.public_key_fingerprint || "—";
   renderDevices(devices.devices || []);
   renderAudit(audit.events || []);
 }
