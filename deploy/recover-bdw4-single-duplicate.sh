@@ -81,7 +81,7 @@ check_wal_shape() {
   local volume="$1" label="$2"
   docker run --rm -i     -v "$volume:/data:ro"     --entrypoint python     "$(docker inspect -f '{{.Config.Image}}' "$SERVER_ID_BEFORE")" - "$label" <<'PY'
 from pathlib import Path
-import json, struct, sys, zlib
+import hashlib, json, struct, sys, zlib
 
 label=sys.argv[1]
 paths=sorted(Path("/data").rglob("atomic.bdw4"))
@@ -115,7 +115,7 @@ while pos < len(data):
     sequence=struct.unpack(">Q",raw[12:20])[0]
     if frame > 1:
         delta=sequence-previous
-        row={"frame":frame,"offset":pos,"previous":previous,"sequence":sequence,"delta":delta}
+        row={"frame":frame,"offset":pos,"previous":previous,"sequence":sequence,"delta":delta,"frame_sha256":hashlib.sha256(raw).hexdigest()}
         if delta == 0: duplicates.append(row)
         elif delta < 0: regressions.append(row)
         elif delta > 1: forward_gaps.append(row)
@@ -123,7 +123,13 @@ while pos < len(data):
     last_sequence=sequence
     pos += total
 
-expected_duplicate={"frame":601,"previous":600,"sequence":600,"delta":0}
+expected_duplicate={
+    "frame":601,
+    "previous":600,
+    "sequence":600,
+    "delta":0,
+    "frame_sha256":"60c8473a6d3ff1797728b6b68aca179a099f8305568ea619f94a5ae95deae265",
+}
 if len(duplicates) != 1:
     raise SystemExit(f"{label}: expected one duplicate, got {duplicates}")
 for key,value in expected_duplicate.items():
@@ -243,7 +249,7 @@ grep -q "^BDR_COMMIT=$TARGET_BDR$" .env
 
 echo "[5/10] Construindo runtime corrigido, Explorer e Server..."
 docker compose build --no-cache memoria bdr-explorer server
-NEW_MEMORIA_IMAGE="$(docker compose images -q memoria)"
+NEW_MEMORIA_IMAGE="$(docker image ls -q memoria-ia-server-memoria:latest | head -n1)"
 test -n "$NEW_MEMORIA_IMAGE"
 
 echo "[6/10] Validando o backup em volume sombra ANTES de tocar no volume live..."
