@@ -19,6 +19,13 @@ class EpistemicTrajectoryStore:
         tmp=self.state_file.with_suffix(".tmp"); tmp.write_text(json.dumps(self.state,ensure_ascii=False,indent=2),encoding="utf-8"); tmp.replace(self.state_file)
     def _append(self,event):
         with self.events_file.open("a",encoding="utf-8") as fh: fh.write(json.dumps(event,ensure_ascii=False)+"\n")
+    def reset(self):
+        with self._lock:
+            self.state={"version":2,"active":{},"closed":{},"stats":{"opened":0,"closed":0,"reopened":0,"steps":0,"positive_gain":0,"zero_gain":0,"negative_gain":0}}
+            self._save()
+            self.events_file.write_text("",encoding="utf-8")
+            return {"trajectories_reset":True}
+
     def _latest_closed_for_key(self,key):
         matches=[x for x in self.state["closed"].values() if str(x.get("key") or "").casefold()==key]
         return max(matches,key=lambda x:float(x.get("closed_at") or x.get("updated_at") or 0)) if matches else None
