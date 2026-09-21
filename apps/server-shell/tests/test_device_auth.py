@@ -235,3 +235,29 @@ def test_corrupt_registry_and_identity_fail_closed(tmp_path):
         pass
     else:
         raise AssertionError("corrupt server identity must fail closed")
+
+
+
+def test_challenge_rate_limit_is_bounded_to_known_device(tmp_path):
+    _identity, _audit, registry, _authority, auth = make_stack(tmp_path)
+    private, public_key = device_key()
+    device = register_active(registry, public_key)
+
+    for _ in range(20):
+        auth.challenge(device["device_id"], client_ip="10.0.0.10")
+    try:
+        auth.challenge(device["device_id"], client_ip="10.0.0.10")
+    except DeviceRegistryError as exc:
+        assert exc.status == 429
+        assert exc.code == "challenge_rate_limited"
+    else:
+        raise AssertionError("challenge rate limit must activate")
+
+    before = len(auth._challenge_rate)
+    try:
+        auth.challenge("dev-" + "f" * 32, client_ip="10.0.0.11")
+    except DeviceRegistryError as exc:
+        assert exc.status == 404
+    else:
+        raise AssertionError("unknown device challenge must fail")
+    assert len(auth._challenge_rate) == before
