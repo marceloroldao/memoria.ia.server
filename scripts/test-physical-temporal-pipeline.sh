@@ -166,6 +166,8 @@ assert len(payloads) == 4
 
 anchors = [int(payload["event"]["trail"][0]) for payload in payloads]
 assert len(set(anchors)) == 4, anchors
+for anchor in anchors:
+    assert sum(anchor in payload["event"]["trail"] for payload in payloads) == 1, anchor
 
 field = ContinuousStructuralAssociationField(
     within_decay=0.35,
@@ -204,11 +206,27 @@ far = field.association(
 near_expected = math.exp(-0.01) * mass(payloads[0], anchors[0]) * mass(payloads[1], anchors[1])
 far_expected = math.exp(-5.0) * mass(payloads[2], anchors[2]) * mass(payloads[3], anchors[3])
 
+cross_near_far = field.association(
+    payloads[0]["provenance"]["hierarchy_id"],
+    anchors[0],
+    anchors[2],
+    channel="temporal",
+)
+cross_near_far_late = field.association(
+    payloads[1]["provenance"]["hierarchy_id"],
+    anchors[1],
+    anchors[3],
+    channel="temporal",
+)
+
 assert abs(near - near_expected) < 1e-12, (near, near_expected)
 assert abs(far - far_expected) < 1e-12, (far, far_expected)
 assert near > far, (near, far)
+assert cross_near_far == 0.0, cross_near_far
+assert cross_near_far_late == 0.0, cross_near_far_late
 print(
     "physical temporal pipeline PASS "
-    f"near_10ms={near:.12f} far_5s={far:.12f} ratio={near / far:.3f}"
+    f"near_10ms={near:.12f} far_5s={far:.12f} ratio={near / far:.3f} "
+    f"cross_clock={cross_near_far:.12f}"
 )
 PY
