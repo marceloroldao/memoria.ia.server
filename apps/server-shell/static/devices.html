@@ -24,6 +24,7 @@
       <h1>Nós administrados pelo servidor.</h1>
       <p>OFF.IAs, computadores, servidores, robôs, sensores e IoT ficam registrados no <strong>server-data</strong>. Esta camada não grava memória semântica nem altera a Memoria.ia.</p>
       <p class="server-id">Servidor: <code id="serverId">carregando…</code></p>
+      <p class="server-id">Autoridade Ed25519: <code id="authorityFingerprint">carregando…</code></p>
     </section>
 
     <section id="deviceStats" class="device-stats" aria-label="Resumo de dispositivos"></section>
@@ -46,7 +47,7 @@
               <option value="iot">IoT</option>
             </select>
           </label>
-          <label class="span-2">Chave pública<textarea id="devicePublicKey" required rows="3" placeholder="Chave pública do dispositivo"></textarea></label>
+          <label class="span-2">Chave pública Ed25519<textarea id="devicePublicKey" required rows="3" placeholder="ed25519:&lt;base64url da chave pública de 32 bytes&gt;"></textarea></label>
           <label>CPU<input id="deviceCpu" placeholder="Ex.: arm64 / x86_64"></label>
           <label>Modelo local<input id="deviceModel" placeholder="Ex.: qwen-local"></label>
           <button class="primary-action span-2" type="submit">Registrar como pendente</button>
@@ -77,8 +78,8 @@
       </div>
       <div class="table-wrap">
         <table class="device-table">
-          <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Estado</th><th>Último contato</th><th>Capacidades</th><th>Ações</th></tr></thead>
-          <tbody id="deviceRows"><tr><td colspan="6">carregando…</td></tr></tbody>
+          <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Estado</th><th>Certificado</th><th>Último contato</th><th>Capacidades</th><th>Ações</th></tr></thead>
+          <tbody id="deviceRows"><tr><td colspan="7">carregando…</td></tr></tbody>
         </table>
       </div>
     </section>
