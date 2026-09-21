@@ -20,6 +20,21 @@ AUDIT_PATH = "/api/server/v1/audit"
 
 _ALLOWED_TYPES = {"offia", "phone", "computer", "server", "robot", "sensor", "iot"}
 _ALLOWED_STATUSES = {"pending", "active", "suspended", "revoked"}
+DEVICE_PERMISSIONS = {
+    "device.self.read",
+    "device.heartbeat",
+    "memory.sync",
+    "model.local.use",
+    "model.remote.use",
+    "ma2a.connect",
+    "telemetry.write",
+    "world.connect",
+}
+_PERMISSION_ALIASES = {
+    "heartbeat": "device.heartbeat",
+    "device.read": "device.self.read",
+}
+_DEFAULT_DEVICE_PERMISSIONS = {"device.self.read", "device.heartbeat"}
 _SECRET_MARKERS = ("password", "secret", "api_key", "private_key", "token", "credential")
 
 
@@ -59,6 +74,22 @@ def _clean_list(value: object, *, max_items: int = 64, max_length: int = 128) ->
             seen.add(text)
             result.append(text)
     return result
+
+
+def normalize_device_permissions(value: object, *, default_if_empty: bool = False) -> list[str]:
+    raw = _clean_list(value, max_items=64, max_length=128)
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for permission in raw:
+        permission = _PERMISSION_ALIASES.get(permission, permission)
+        if permission not in DEVICE_PERMISSIONS:
+            raise DeviceRegistryError(422, "invalid_permission", f"unsupported device permission: {permission}")
+        if permission not in seen:
+            seen.add(permission)
+            normalized.append(permission)
+    if default_if_empty and not normalized:
+        normalized = sorted(_DEFAULT_DEVICE_PERMISSIONS)
+    return normalized
 
 
 def _clean_mapping(value: object, *, allowed: set[str], max_string: int = 256) -> dict[str, object]:
@@ -300,7 +331,7 @@ class DeviceRegistry:
         capabilities = self._capabilities(payload.get("capabilities"))
         versions = self._versions(payload.get("versions"))
         groups = _clean_list(payload.get("groups"), max_items=32)
-        permissions = _clean_list(payload.get("permissions"), max_items=64)
+        permissions = normalize_device_permissions(payload.get("permissions"), default_if_empty=True)
         now = _now()
 
         with self._lock:
@@ -446,6 +477,40 @@ class DeviceRegistry:
     def revoke(self, device_id: str, *, actor: str, client_ip: str | None = None) -> dict[str, object]:
         return self._transition(device_id, "revoked", actor=actor, client_ip=client_ip)
 
+    def set_permissions(
+        self,
+        device_id: str,
+        permissions: object,
+        *,
+        actor: str,
+        client_ip: str | None = None,
+    ) -> dict[str, object]:
+        normalized = normalize_device_permissions(permissions, default_if_empty=False)
+        now = _now()
+        with self._lock:
+            item = self._record(device_id)
+            if item.get("status") == "revoked":
+                raise DeviceRegistryError(409, "device_revoked", "revoked devices cannot change permissions")
+            previous = list(item.get("permissions") or [])
+            item["permissions"] = normalized
+            item["updated_at"] = now
+            if item.get("status") == "active" and self.certificate_issuer is not None:
+                issued = self.certificate_issuer(dict(item))
+                if issued is not None:
+                    item["certificate"] = issued
+                    item["certificate_status"] = "active"
+            self._save()
+            result = dict(item)
+
+        self.audit.append(
+            "device.permissions_updated",
+            actor=actor,
+            target=device_id,
+            client_ip=client_ip,
+            details={"from": previous, "to": normalized},
+        )
+        return result
+
     def heartbeat(
         self,
         device_id: str,
@@ -524,7 +589,7 @@ class DeviceRegistry:
                 handler._write_json(200, self.get(device_id))
                 return True
 
-            if len(parts) == 2 and parts[1] in {"approve", "suspend", "revoke", "heartbeat"}:
+            if len(parts) == 2 and parts[1] in {"approve", "suspend", "revoke", "heartbeat", "permissions"}:
                 if handler.command != "POST":
                     handler._write_json(405, {"error": "method_not_allowed"}, {"Allow": "POST"})
                     return True
@@ -535,6 +600,9 @@ class DeviceRegistry:
                     result = self.suspend(device_id, actor=actor, client_ip=client_ip)
                 elif action == "revoke":
                     result = self.revoke(device_id, actor=actor, client_ip=client_ip)
+                elif action == "permissions":
+                    payload = self._json_body(handler)
+                    result = self.set_permissions(device_id, payload.get("permissions"), actor=actor, client_ip=client_ip)
                 else:
                     result = self.heartbeat(device_id, self._json_body(handler), actor=actor, client_ip=client_ip)
                 handler._write_json(200, result)
