@@ -1,7 +1,7 @@
 FROM alpine:3.20 AS source
 
 RUN apk add --no-cache git ca-certificates
-ARG BIT_ANALYZE_COMMIT=b10815676e8dd7895a45656677882fb0838c1792
+ARG BIT_ANALYZE_COMMIT=0d3be9add8f61dc4f741a7d4de7b9e513b32ac3e
 RUN git init /source && \
     git -C /source remote add origin https://github.com/marceloroldao/bit.analyze.git && \
     git -C /source fetch --depth 1 origin "${BIT_ANALYZE_COMMIT}" && \
