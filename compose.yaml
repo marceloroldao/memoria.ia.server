@@ -106,6 +106,40 @@ services:
     security_opt: ["no-new-privileges:true"]
     networks: [internal]
 
+  bit-analyze:
+    build:
+      context: .
+      dockerfile: docker/bit-analyze/Dockerfile
+      args:
+        BIT_ANALYZE_COMMIT: ${BIT_ANALYZE_COMMIT:-b10815676e8dd7895a45656677882fb0838c1792}
+    environment:
+      BIT_ANALYZE_STATE_DIR: /state
+      BIT_ANALYZE_SPOOL: /source/curiosity/raw-web/bit-analyze-ingest.jsonl
+      BIT_ANALYZE_RAW_ROOT: /source/curiosity/raw-web
+      BIT_ANALYZE_CHECKPOINT_DIR: /state/checkpoints
+      BIT_ANALYZE_INTERVAL_SECONDS: ${BIT_ANALYZE_INTERVAL_SECONDS:-5}
+      BIT_ANALYZE_MAX_RECORDS: ${BIT_ANALYZE_MAX_RECORDS:-100}
+      BIT_ANALYZE_WINDOW_BYTES: ${BIT_ANALYZE_WINDOW_BYTES:-4096}
+      BIT_ANALYZE_HOP_BYTES: ${BIT_ANALYZE_HOP_BYTES:-4096}
+      BIT_ANALYZE_CHUNK_BYTES: ${BIT_ANALYZE_CHUNK_BYTES:-65536}
+      BIT_ANALYZE_LAYERS: ${BIT_ANALYZE_LAYERS:-2}
+    volumes:
+      - server-data:/source:ro
+      - bit-analyze-data:/state
+    depends_on:
+      server: {condition: service_healthy}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    network_mode: none
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json; d=json.load(open('/state/worker-status.json')); assert d.get('status') in {'healthy','waiting'}"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
   server:
     build:
       context: .
@@ -163,6 +197,7 @@ volumes:
   memoria-data:
   model-gateway-data:
   server-data:
+  bit-analyze-data:
 
 networks:
   internal:
