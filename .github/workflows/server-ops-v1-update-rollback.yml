@@ -1,0 +1,174 @@
+name: Server Ops V1 update and rollback
+
+on:
+  push:
+    branches: [deploy/server-ops-v1]
+    paths:
+      - 'deploy/update-server-ops-v1.sh'
+      - '.github/workflows/server-ops-v1-update-rollback.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server-only-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve updater and validate syntax
+        run: |
+          bash -n deploy/update-server-ops-v1.sh
+          cp deploy/update-server-ops-v1.sh /tmp/update-server-ops-v1.sh
+          chmod +x /tmp/update-server-ops-v1.sh
+
+      - name: Switch to previous validated Server generation
+        run: git checkout --detach e2e31b1d8061f7f3ae849aea5f57dd3ad90826d0
+
+      - name: Prepare isolated production-like environment
+        run: |
+          cp .env.example .env
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('.env')
+          values={
+            'MEMORIA_SERVER_PORT':'8780',
+            'MEMORIA_SERVER_ADMIN_USER':'admin',
+            'MEMORIA_SERVER_ADMIN_PASSWORD':'ci-server-ops-admin',
+            'MEMORIA_API_KEY':'ci-server-ops-api-key',
+            'MEMORIA_ORGANIZATION_ID':'ci-server-ops',
+            'MEMORIA_ORGANIZATION_NAME':'CI Server Ops',
+            'MEMORIA_NODE_ID':'memoria:ci-server-ops:primary',
+            'MEMORIA_CURIOSITY_ENABLED':'false',
+            'MEMORIA_COMMIT':'ec817397b67ad0fadb3e1ec0b82e6a837869e0a1',
+            'BDR_COMMIT':'eb77ad7286f234243ca1ed1a2af2d55df8c12238',
+          }
+          lines=p.read_text().splitlines()
+          out=[]; seen=set()
+          for line in lines:
+              key=line.split('=',1)[0] if '=' in line and not line.lstrip().startswith('#') else None
+              if key in values:
+                  out.append(f'{key}={values[key]}'); seen.add(key)
+              else:
+                  out.append(line)
+          for key,value in values.items():
+              if key not in seen: out.append(f'{key}={value}')
+          p.write_text('\n'.join(out)+'\n')
+          PY
+
+      - name: Build and start old full stack
+        run: |
+          docker compose build memoria bdr-explorer model-gateway server
+          docker compose up -d model-gateway memoria bdr-explorer server
+          for i in $(seq 1 75); do
+            if curl -fsS http://127.0.0.1:8780/api/server/v1/health >/tmp/health-old.json 2>/dev/null; then
+              cat /tmp/health-old.json
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          docker compose logs --tail=400
+          exit 1
+
+      - name: Seed server-data marker and capture protected component identity
+        run: |
+          docker compose exec -T server sh -c 'printf before-server-ops > /data/server-ops-marker.txt'
+          docker compose exec -T server cat /data/server-identity.json > /tmp/server-identity-before.json
+          docker compose ps -q memoria > /tmp/memoria-id-before
+          docker compose ps -q bdr-explorer > /tmp/bdr-id-before
+          docker compose ps -q model-gateway > /tmp/gateway-id-before
+          sha256sum .env > /tmp/env-before.sha256
+
+      - name: Execute server-only production updater
+        env:
+          MEMORIA_SERVER_DIR: ${{ github.workspace }}
+          MEMORIA_SERVER_HEALTH_URL: http://127.0.0.1:8780/api/server/v1/health
+          MEMORIA_BACKUP_ROOT: /tmp/server-ops-backups
+        run: |
+          set -o pipefail
+          /tmp/update-server-ops-v1.sh 2>&1 | tee /tmp/server-ops-update.log
+
+      - name: Prove protected services and server state were preserved
+        run: |
+          test "$(git rev-parse HEAD)" = "eebf6a0a73ba3a20a12cb50343af2af889da739e"
+          test "$(docker compose ps -q memoria)" = "$(cat /tmp/memoria-id-before)"
+          test "$(docker compose ps -q bdr-explorer)" = "$(cat /tmp/bdr-id-before)"
+          test "$(docker compose ps -q model-gateway)" = "$(cat /tmp/gateway-id-before)"
+          sha256sum -c /tmp/env-before.sha256
+          test "$(docker compose exec -T server cat /data/server-ops-marker.txt)" = "before-server-ops"
+          docker compose exec -T server cat /data/server-identity.json > /tmp/server-identity-after.json
+          cmp /tmp/server-identity-before.json /tmp/server-identity-after.json
+
+      - name: Exercise Enrollment V1 then prove secret is not persisted
+        run: |
+          docker compose exec -T server python - <<'PY'
+          import http.cookiejar, json, os
+          from pathlib import Path
+          from urllib.request import HTTPCookieProcessor, Request, build_opener
+
+          base='http://127.0.0.1:8780'
+          opener=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+          login=json.dumps({
+              'username':os.environ.get('MEMORIA_SERVER_ADMIN_USER','admin'),
+              'password':os.environ['MEMORIA_SERVER_ADMIN_PASSWORD'],
+          }).encode()
+          with opener.open(Request(base+'/api/server/v1/login',data=login,headers={'Content-Type':'application/json'},method='POST'),timeout=10) as r:
+              assert r.status==200
+          body=json.dumps({
+              'label':'CI OFF.IA',
+              'type':'offia',
+              'expires_minutes':30,
+              'permissions':['device.self.read','device.heartbeat','memory.sync'],
+              'groups':['ci'],
+          }).encode()
+          with opener.open(Request(base+'/api/server/v1/enrollments',data=body,headers={'Content-Type':'application/json'},method='POST'),timeout=10) as r:
+              created=json.load(r)
+          code=created['enrollment_code']
+          assert code.startswith('enr1_')
+          persisted=Path('/data/enrollments.json').read_text('utf-8')
+          assert code not in persisted
+          Path('/tmp/enrollment-code.txt').write_text(code,encoding='utf-8')
+          print('ENROLLMENT_OK',created['invitation']['enrollment_id'])
+          PY
+
+      - name: Execute generated rollback
+        env:
+          MEMORIA_SERVER_HEALTH_URL: http://127.0.0.1:8780/api/server/v1/health
+        run: |
+          ROLLBACK="$(find /tmp/server-ops-backups -name rollback.sh -type f | head -n1)"
+          test -n "$ROLLBACK"
+          "$ROLLBACK"
+
+      - name: Validate exact rollback and protected services still untouched
+        run: |
+          test "$(git rev-parse HEAD)" = "e2e31b1d8061f7f3ae849aea5f57dd3ad90826d0"
+          test "$(docker compose ps -q memoria)" = "$(cat /tmp/memoria-id-before)"
+          test "$(docker compose ps -q bdr-explorer)" = "$(cat /tmp/bdr-id-before)"
+          test "$(docker compose ps -q model-gateway)" = "$(cat /tmp/gateway-id-before)"
+          sha256sum -c /tmp/env-before.sha256
+          test "$(docker compose exec -T server cat /data/server-ops-marker.txt)" = "before-server-ops"
+          docker compose exec -T server cat /data/server-identity.json > /tmp/server-identity-rollback.json
+          cmp /tmp/server-identity-before.json /tmp/server-identity-rollback.json
+          if docker compose exec -T server test -e /data/enrollments.json; then
+            echo "ERRO: enrollment criado depois do snapshot sobreviveu ao rollback"
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:8780/api/server/v1/health
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          git status || true
+          docker compose ps || true
+          docker compose logs --tail=500 || true
+          cat /tmp/server-ops-update.log 2>/dev/null || true
+          find /tmp/server-ops-backups -maxdepth 3 -type f -print 2>/dev/null || true
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v || true
