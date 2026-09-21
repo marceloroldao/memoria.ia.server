@@ -6,6 +6,10 @@ on:
     paths:
       - 'deploy/recover-bdw4-single-duplicate.sh'
       - '.github/workflows/bdw4-shadow-open-recovery.yml'
+  pull_request:
+    paths:
+      - 'deploy/recover-bdw4-single-duplicate.sh'
+      - '.github/workflows/bdw4-shadow-open-recovery.yml'
   workflow_dispatch:
 
 permissions:
