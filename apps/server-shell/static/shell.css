@@ -150,3 +150,33 @@ footer { padding: 24px; color: var(--muted); text-align: center; font-size: .8re
   .device-form { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
 }
+
+.enrollment-layout { margin-bottom: 20px; }
+.secret-box {
+  border: 1px solid rgba(244,184,96,.45);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(244,184,96,.06);
+  display: grid;
+  gap: 10px;
+}
+.secret-box[hidden] { display: none; }
+.secret-box span { color: #f4b860; font-size: .82rem; }
+.secret-box code {
+  display: block;
+  padding: 10px;
+  border-radius: 8px;
+  background: #050914;
+  color: var(--cyan);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.permission-cell {
+  min-width: 190px;
+  max-width: 270px;
+  color: var(--muted);
+  font-size: .78rem;
+  overflow-wrap: anywhere;
+}
+.enrollment-row .device-actions { margin-top: 8px; }
+.device-form select[multiple] { min-height: 170px; }
