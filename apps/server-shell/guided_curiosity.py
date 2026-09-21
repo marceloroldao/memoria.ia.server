@@ -69,6 +69,18 @@ class TrajectoryGuidedCuriosityEngine(CuriosityEngine):
                 )
                 force = True
 
+        if not force and self.walker.frontier:
+            title, url = self.walker.frontier[0]
+            self._event(
+                "trajectory_guidance",
+                f"Próximo endereço web: {url} (frontier_unexplored).",
+                topic=str(title or url),
+                source="web_frontier",
+                url=url,
+                trajectory_reason="frontier_unexplored",
+            )
+            return str(title or url), "web_frontier"
+
         jump = force or not self.state.current_topic or self._rng.random() < self.config.curiosity_random_jump_rate
         if jump:
             candidates = [s for s in SEEDS if s not in trajectory] or list(SEEDS)
@@ -77,16 +89,6 @@ class TrajectoryGuidedCuriosityEngine(CuriosityEngine):
             self.state.jumps += int(bool(self.state.current_topic))
             return topic, (choice or {}).get("reason") or ("stagnation_jump" if force else "random_jump")
 
-        recent_terms = []
-        with self._lock:
-            for event in list(self._events)[-20:]:
-                recent_terms.extend(event.get("terms", []) or [])
-        options = [t for t in dict.fromkeys(recent_terms) if t != self.state.current_topic and t not in trajectory]
-        if options:
-            choice = self._guided_choice([(t, 0.0) for t in options], "novel_neighbor")
-            if choice:
-                return choice["topic"], choice["reason"]
-            return self._rng.choice(options), "novel_neighbor"
         return self.state.current_topic, "continue"
 
     def snapshot(self, after: int = 0):
