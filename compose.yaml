@@ -106,6 +106,40 @@ services:
     security_opt: ["no-new-privileges:true"]
     networks: [internal]
 
+  bit-analyze:
+    build:
+      context: .
+      dockerfile: docker/bit-analyze/Dockerfile
+      args:
+        BIT_ANALYZE_COMMIT: ${BIT_ANALYZE_COMMIT:-0d3be9add8f61dc4f741a7d4de7b9e513b32ac3e}
+    environment:
+      BIT_ANALYZE_STATE_DIR: /state
+      BIT_ANALYZE_SPOOL: /source/curiosity/raw-web/bit-analyze-ingest.jsonl
+      BIT_ANALYZE_RAW_ROOT: /source/curiosity/raw-web
+      BIT_ANALYZE_CHECKPOINT_DIR: /state/checkpoints
+      BIT_ANALYZE_INTERVAL_SECONDS: ${BIT_ANALYZE_INTERVAL_SECONDS:-5}
+      BIT_ANALYZE_MAX_RECORDS: ${BIT_ANALYZE_MAX_RECORDS:-100}
+      BIT_ANALYZE_WINDOW_BYTES: ${BIT_ANALYZE_WINDOW_BYTES:-4096}
+      BIT_ANALYZE_HOP_BYTES: ${BIT_ANALYZE_HOP_BYTES:-4096}
+      BIT_ANALYZE_CHUNK_BYTES: ${BIT_ANALYZE_CHUNK_BYTES:-65536}
+      BIT_ANALYZE_LAYERS: ${BIT_ANALYZE_LAYERS:-2}
+    volumes:
+      - server-data:/source:ro
+      - bit-analyze-data:/state
+    depends_on:
+      server: {condition: service_healthy}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    network_mode: none
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json; d=json.load(open('/state/worker-status.json')); assert d.get('status') in {'healthy','waiting'}"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
   server:
     build:
       context: .
@@ -125,6 +159,7 @@ services:
       MEMORIA_SERVER_SESSION_HOURS: ${MEMORIA_SERVER_SESSION_HOURS:-8}
       MEMORIA_SERVER_COOKIE_SECURE: ${MEMORIA_SERVER_COOKIE_SECURE:-false}
       MEMORIA_SERVER_DATA_DIR: /data
+      BIT_ANALYZE_STATE_DIR: /bit-analyze
       MEMORIA_API_KEY: ${MEMORIA_API_KEY}
       MEMORIA_CURIOSITY_ENABLED: ${MEMORIA_CURIOSITY_ENABLED:-true}
       MEMORIA_CURIOSITY_DATA_DIR: /data/curiosity
@@ -141,6 +176,7 @@ services:
       MEMORIA_CURIOSITY_SEARCH_URL: ${MEMORIA_CURIOSITY_SEARCH_URL:-https://html.duckduckgo.com/html/?q=QUERY}
     volumes:
       - server-data:/data
+      - bit-analyze-data:/bit-analyze:ro
     depends_on:
       memoria: {condition: service_healthy}
       bdr-explorer: {condition: service_healthy}
@@ -163,6 +199,7 @@ volumes:
   memoria-data:
   model-gateway-data:
   server-data:
+  bit-analyze-data:
 
 networks:
   internal:

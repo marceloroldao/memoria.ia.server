@@ -27,6 +27,7 @@ class ShellConfig:
     cookie_secure: bool = False
     memoria_api_key: str = ""
     server_data_dir: str = "/data"
+    bit_analyze_state_dir: str = "/bit-analyze"
     curiosity_enabled: bool = True
     curiosity_data_dir: str = "/data/curiosity"
     # Continuous pacing is primarily controlled by the cycle interval. The
@@ -61,6 +62,7 @@ class ShellConfig:
             cookie_secure=_bool_env("MEMORIA_SERVER_COOKIE_SECURE", cls.cookie_secure),
             memoria_api_key=os.getenv("MEMORIA_API_KEY", cls.memoria_api_key),
             server_data_dir=os.getenv("MEMORIA_SERVER_DATA_DIR", cls.server_data_dir),
+            bit_analyze_state_dir=os.getenv("BIT_ANALYZE_STATE_DIR", cls.bit_analyze_state_dir),
             curiosity_enabled=_bool_env("MEMORIA_CURIOSITY_ENABLED", cls.curiosity_enabled),
             curiosity_data_dir=os.getenv("MEMORIA_CURIOSITY_DATA_DIR", cls.curiosity_data_dir),
             curiosity_interval_seconds=max(5.0, float(os.getenv("MEMORIA_CURIOSITY_INTERVAL_SECONDS", str(cls.curiosity_interval_seconds)))),
