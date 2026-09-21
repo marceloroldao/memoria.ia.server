@@ -111,7 +111,7 @@ services:
       context: .
       dockerfile: docker/bit-analyze/Dockerfile
       args:
-        BIT_ANALYZE_COMMIT: ${BIT_ANALYZE_COMMIT:-0d3be9add8f61dc4f741a7d4de7b9e513b32ac3e}
+        BIT_ANALYZE_COMMIT: ${BIT_ANALYZE_COMMIT:-3c35c7a8b03e77fd553bbbbea0f5595d8696ab13}
     environment:
       BIT_ANALYZE_STATE_DIR: /state
       BIT_ANALYZE_SPOOL: /source/curiosity/raw-web/bit-analyze-ingest.jsonl
