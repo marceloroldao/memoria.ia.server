@@ -6,6 +6,7 @@ state and never accesses BDR internals.
 from __future__ import annotations
 
 import base64
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -251,6 +252,7 @@ class DeviceAuthManager:
         self._lock = RLock()
         self._challenges: dict[str, dict[str, object]] = {}
         self._tokens: dict[str, dict[str, object]] = {}
+        self._challenge_rate: dict[str, deque[float]] = defaultdict(deque)
 
     def _cleanup(self) -> None:
         now = time.monotonic()
@@ -268,6 +270,15 @@ class DeviceAuthManager:
         ).encode("utf-8")
 
     def challenge(self, device_id: str, *, client_ip: str | None = None) -> dict[str, object]:
+        rate_key = f"{client_ip or 'unknown'}:{device_id}"
+        now_mono = time.monotonic()
+        with self._lock:
+            attempts = self._challenge_rate[rate_key]
+            while attempts and now_mono - attempts[0] > 60.0:
+                attempts.popleft()
+            if len(attempts) >= 20:
+                raise DeviceRegistryError(429, "challenge_rate_limited", "too many authentication challenges")
+            attempts.append(now_mono)
         device = self.registry.get(device_id)
         if device.get("status") != "active":
             raise DeviceRegistryError(403, "device_not_active", "device must be active")
