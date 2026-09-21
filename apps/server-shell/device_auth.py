@@ -258,6 +258,12 @@ class DeviceAuthManager:
         now = time.monotonic()
         self._challenges = {key: value for key, value in self._challenges.items() if float(value["expires_mono"]) > now}
         self._tokens = {key: value for key, value in self._tokens.items() if float(value["expires_mono"]) > now}
+        for key in list(self._challenge_rate):
+            attempts = self._challenge_rate[key]
+            while attempts and now - attempts[0] > 60.0:
+                attempts.popleft()
+            if not attempts:
+                self._challenge_rate.pop(key, None)
 
     @staticmethod
     def _message(server_id: str, device_id: str, challenge_id: str, nonce: str) -> bytes:
@@ -270,16 +276,17 @@ class DeviceAuthManager:
         ).encode("utf-8")
 
     def challenge(self, device_id: str, *, client_ip: str | None = None) -> dict[str, object]:
+        device = self.registry.get(device_id)
         rate_key = f"{client_ip or 'unknown'}:{device_id}"
         now_mono = time.monotonic()
         with self._lock:
+            self._cleanup()
             attempts = self._challenge_rate[rate_key]
             while attempts and now_mono - attempts[0] > 60.0:
                 attempts.popleft()
             if len(attempts) >= 20:
                 raise DeviceRegistryError(429, "challenge_rate_limited", "too many authentication challenges")
             attempts.append(now_mono)
-        device = self.registry.get(device_id)
         if device.get("status") != "active":
             raise DeviceRegistryError(403, "device_not_active", "device must be active")
         certificate = device.get("certificate")
