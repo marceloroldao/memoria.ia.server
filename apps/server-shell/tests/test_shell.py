@@ -5,7 +5,7 @@ SHELL_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SHELL_DIR))
 
 from config import ShellConfig
-from server import proxy_target, static_target
+from server import proxy_target, server_capabilities, static_target
 
 
 def test_memoria_namespace_is_preserved():
@@ -44,3 +44,17 @@ def test_module_static_routes_are_explicit():
     assert static_target("/admin/memoria").name == "index.html"
     assert static_target("/explorer/bdr/app.js").name == "app.js"
     assert static_target("/../../etc/passwd") is None
+
+
+
+def test_server_owned_static_routes_include_devices_and_admin_diagnostics_fix():
+    assert static_target("/devices").name == "devices.html"
+    assert static_target("/devices.js").name == "devices.js"
+    assert static_target("/admin/memoria/diagnostics-fix.js").name == "diagnostics-fix.js"
+
+
+def test_server_capabilities_do_not_advertise_unimplemented_bdr_format():
+    capabilities = server_capabilities()
+    assert capabilities["device_registry_v1"] is True
+    assert capabilities["audit_log_v1"] is True
+    assert capabilities["format_bdr"] is False
