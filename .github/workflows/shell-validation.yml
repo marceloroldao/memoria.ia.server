@@ -39,6 +39,7 @@ jobs:
       - run: python -m compileall -q apps/server-shell apps/bdr-explorer/explorer
       - run: python -m compileall -q apps/model-gateway
       - run: node --check apps/server-shell/static/shell.js
+      - run: node --check apps/server-shell/static/devices.js
       - run: node --check apps/memoria-admin/static/app.js
       - run: node --check apps/bdr-explorer/explorer/static/app.js
       - run: docker compose config --quiet

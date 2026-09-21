@@ -15,11 +15,15 @@ async function refreshHealth() {
     $("healthDot").dataset.state = health.status;
     setState("memoriaState", health.components.memoria.status);
     setState("bdrState", health.components.bdr_explorer.status);
+    $("deviceState").textContent = `${health.devices?.total ?? 0} dispositivo(s)`;
+    $("deviceState").dataset.state = "online";
   } catch {
     $("healthText").textContent = "shell sem telemetria";
     $("healthDot").dataset.state = "offline";
     setState("memoriaState", "offline");
     setState("bdrState", "offline");
+    $("deviceState").textContent = "indisponível";
+    $("deviceState").dataset.state = "offline";
   }
 }
 
