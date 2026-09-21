@@ -23,6 +23,14 @@ The Server currently enforces:
 
 - `GET /api/server/v1/device/self` -> `device.self.read`
 - `POST /api/server/v1/device/heartbeat` -> `device.heartbeat`
+- `POST /api/server/v1/device/memory/structural/observe` -> `memory.sync`
+- `POST /api/server/v1/device/memory/structural/resolve` -> `memory.sync`
+
+The structural text memory facade is device-scoped. The Server derives the
+Memoria.ia `hierarchy_id`, `source_id` and `source_kind` from the
+authenticated device instead of accepting ownership fields from the client.
+The administrative `X-Memoria-Key` is used only on the internal
+Server -> Memoria.ia hop and is never a device credential.
 
 The remaining scopes are reserved contracts for the matching future server modules. They are not treated as authorization until those endpoints exist.
 
