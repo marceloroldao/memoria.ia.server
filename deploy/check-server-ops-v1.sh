@@ -45,6 +45,13 @@ password=os.environ["MEMORIA_SERVER_ADMIN_PASSWORD"]
 status, health = open_json(opener,"/api/server/v1/health")
 assert status==200, status
 assert health.get("shell",{}).get("status")=="online", health
+assert health.get("status")=="online", health
+for component_name, component in (health.get("components") or {}).items():
+    assert component.get("status")=="online", (component_name, component, health)
+
+status, ready = open_json(opener,"/api/server/v1/ready")
+assert status==200, status
+assert ready.get("ready") is True, ready
 
 status, authority = open_json(opener,"/api/server/v1/device-auth/authority")
 assert status==200, status
