@@ -64,7 +64,7 @@ jobs:
         run: |
           IMAGE="$(docker compose images -q memoria)"
           test -n "$IMAGE"
-          docker run --rm             -e MEMORIA_ORGANIZATION_ID=ci-recovery             -v bdw4-shadow:/data             --entrypoint python             "$IMAGE" - <<'PY'
+          docker run --rm -i             -e MEMORIA_ORGANIZATION_ID=ci-recovery             -v bdw4-shadow:/data             --entrypoint python             "$IMAGE" - <<'PY'
           from pathlib import Path
           from memoria_resolutiva.native_runtime import NativeRuntime
 
