@@ -316,6 +316,8 @@ class DeviceEnrollmentManager:
                 actor=f"enrollment:{enrollment_id}",
                 client_ip=client_ip,
             )
+            if not created:
+                raise DeviceRegistryError(409, "device_already_registered", "device public key is already registered")
         except Exception:
             with self._lock:
                 invitations = self._state.get("invitations")
