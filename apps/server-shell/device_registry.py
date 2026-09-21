@@ -224,6 +224,7 @@ class DeviceRegistry:
         self.path = self.root / "devices.json"
         self.identity = identity
         self.audit = audit
+        self.certificate_issuer = None
         self._lock = RLock()
         self.root.mkdir(parents=True, exist_ok=True)
         self._state = self._load()
@@ -240,6 +241,10 @@ class DeviceRegistry:
     def _save(self) -> None:
         self._state["updated_at"] = _now()
         _atomic_json(self.path, self._state)
+
+    def set_certificate_issuer(self, issuer) -> None:
+        """Attach a server-owned issuer without coupling the registry to crypto."""
+        self.certificate_issuer = issuer
 
     @staticmethod
     def _capabilities(value: object) -> dict[str, object]:
@@ -391,10 +396,24 @@ class DeviceRegistry:
             if target_status == "active":
                 item["approved_at"] = item.get("approved_at") or now
                 item["suspended_at"] = None
+                certificate = item.get("certificate")
+                if self.certificate_issuer is not None:
+                    issued = self.certificate_issuer(dict(item))
+                    if issued is not None:
+                        item["certificate"] = issued
+                        item["certificate_status"] = "active"
+                    elif not isinstance(certificate, dict):
+                        item["certificate_status"] = "not_issued"
+                elif isinstance(certificate, dict) and item.get("certificate_status") == "suspended":
+                    item["certificate_status"] = "active"
             elif target_status == "suspended":
                 item["suspended_at"] = now
+                if isinstance(item.get("certificate"), dict):
+                    item["certificate_status"] = "suspended"
             elif target_status == "revoked":
                 item["revoked_at"] = now
+                if isinstance(item.get("certificate"), dict):
+                    item["certificate_status"] = "revoked"
             self._save()
             result = dict(item)
 
