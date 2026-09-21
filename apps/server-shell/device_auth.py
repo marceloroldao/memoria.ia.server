@@ -88,21 +88,28 @@ class DeviceAuthority:
         self._private_key, self._public_text, self._created_at = self._load_or_create()
 
     def _load_or_create(self) -> tuple[Ed25519PrivateKey, str, str]:
-        try:
-            payload = json.loads(self.path.read_text("utf-8"))
-            if payload.get("schema") == self.SCHEMA and payload.get("server_id") == self.identity.snapshot()["server_id"]:
+        if self.path.exists():
+            try:
+                payload = json.loads(self.path.read_text("utf-8"))
+                if payload.get("schema") != self.SCHEMA or payload.get("server_id") != self.identity.snapshot()["server_id"]:
+                    raise RuntimeError("device authority state does not match server identity")
                 raw = _b64decode(str(payload.get("private_key") or ""))
-                if len(raw) == 32:
-                    key = Ed25519PrivateKey.from_private_bytes(raw)
-                    public_text = "ed25519:" + _b64encode(
-                        key.public_key().public_bytes(
-                            encoding=serialization.Encoding.Raw,
-                            format=serialization.PublicFormat.Raw,
-                        )
+                if len(raw) != 32:
+                    raise RuntimeError("device authority private key has invalid size")
+                key = Ed25519PrivateKey.from_private_bytes(raw)
+                public_text = "ed25519:" + _b64encode(
+                    key.public_key().public_bytes(
+                        encoding=serialization.Encoding.Raw,
+                        format=serialization.PublicFormat.Raw,
                     )
-                    return key, public_text, str(payload.get("created_at") or _now())
-        except Exception:
-            pass
+                )
+                if payload.get("public_key") and payload.get("public_key") != public_text:
+                    raise RuntimeError("device authority public/private key mismatch")
+                return key, public_text, str(payload.get("created_at") or _now())
+            except DeviceRegistryError as exc:
+                raise RuntimeError("device authority state is invalid") from exc
+            except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
+                raise RuntimeError("device authority state is unreadable") from exc
 
         key = Ed25519PrivateKey.generate()
         private_raw = key.private_bytes(
