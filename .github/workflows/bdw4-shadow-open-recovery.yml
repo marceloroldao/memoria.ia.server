@@ -1,0 +1,89 @@
+name: BDW4 shadow-open recovery gate
+
+on:
+  push:
+    branches: [deploy/recover-bdw4-single-duplicate]
+    paths:
+      - 'deploy/recover-bdw4-single-duplicate.sh'
+      - '.github/workflows/bdw4-shadow-open-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shadow-open:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure recovery pins
+        run: |
+          cp .env.example .env
+          sed -i 's#^MEMORIA_COMMIT=.*#MEMORIA_COMMIT=ea8501c3314ccef700188d14bf29effcf2d82de3#' .env
+          sed -i 's#^BDR_COMMIT=.*#BDR_COMMIT=39c34434b540f4348851703d912277080c8445ec#' .env
+
+      - name: Build recovered Memoria image
+        run: docker compose build --no-cache memoria
+
+      - name: Generate exact observed sequence shape
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import struct, zlib
+
+          target=Path("/tmp/atomic.bdw4")
+
+          def make_frame(sequence, operations):
+              body=b"BDW4"+struct.pack(">I",4)+struct.pack(">Q",sequence)+struct.pack(">I",len(operations))
+              for key,value in operations:
+                  key=key.encode()
+                  value=value.encode()
+                  body += bytes([1])+struct.pack(">I",len(key))+struct.pack(">I",len(value))+key+value
+              raw=struct.pack(">I",4+len(body)+4)+body
+              return raw+struct.pack(">I",zlib.crc32(raw)&0xffffffff)
+
+          with target.open("wb") as output:
+              for sequence in range(1,601):
+                  output.write(make_frame(sequence,[("probe",str(sequence))]))
+              output.write(make_frame(600,[(f"duplicate/{i}",f"value-{i}") for i in range(15)]))
+              for sequence in range(601,33790):
+                  output.write(make_frame(sequence,[("probe",str(sequence))]))
+
+          print(target.stat().st_size)
+          PY
+          sha256sum /tmp/atomic.bdw4 > /tmp/before.sha256
+
+      - name: Restore fixture into isolated shadow volume
+        run: |
+          docker volume create bdw4-shadow >/dev/null
+          docker run --rm -v bdw4-shadow:/target -v /tmp:/source:ro alpine:3.20             sh -c 'mkdir -p /target/native-runtime && cp /source/atomic.bdw4 /target/native-runtime/atomic.bdw4'
+
+      - name: Cold-open fixture with fixed Memoria and recovered BDR
+        run: |
+          IMAGE="$(docker compose images -q memoria)"
+          test -n "$IMAGE"
+          docker run --rm             -e MEMORIA_ORGANIZATION_ID=ci-recovery             -v bdw4-shadow:/data             --entrypoint python             "$IMAGE" - <<'PY'
+          from pathlib import Path
+          from memoria_resolutiva.native_runtime import NativeRuntime
+
+          runtime=NativeRuntime(
+              library_path=Path("/usr/local/lib/libmemoria_mobile.so"),
+              data_dir=Path("/data/native-runtime"),
+              organization_id="ci-recovery",
+          )
+          runtime.close()
+          print("SHADOW_NATIVE_OPEN=PASS")
+          PY
+
+      - name: Prove cold-open did not rewrite historical WAL
+        run: |
+          docker run --rm -v bdw4-shadow:/source:ro alpine:3.20             sha256sum /source/native-runtime/atomic.bdw4 > /tmp/after.sha256
+          sed 's#  .*#  WAL#' /tmp/before.sha256 > /tmp/before.norm
+          sed 's#  .*#  WAL#' /tmp/after.sha256 > /tmp/after.norm
+          cmp /tmp/before.norm /tmp/after.norm
+
+      - name: Cleanup
+        if: always()
+        run: docker volume rm -f bdw4-shadow >/dev/null 2>&1 || true
