@@ -171,5 +171,5 @@ $("logout").addEventListener("click", async () => {
 refreshAll().catch((error) => {
   $("deviceRows").replaceChildren();
   const tr = document.createElement("tr");
-  const td = el("td", error.message, "muted"); td.colSpan = 6; tr.append(td); $("deviceRows").append(tr);
+  const td = el("td", error.message, "muted"); td.colSpan = 7; tr.append(td); $("deviceRows").append(tr);
 });
