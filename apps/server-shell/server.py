@@ -13,6 +13,7 @@ from autonomous_tests import AutonomousTestManager
 from config import ShellConfig
 from device_registry import AUDIT_PATH, IDENTITY_PATH, AuditLog, DeviceRegistry, ServerIdentity
 from device_auth import DeviceAuthManager, DeviceAuthority
+from device_structural_memory import DeviceStructuralMemory
 from device_enrollment import DeviceEnrollmentManager
 from guided_curiosity import TrajectoryGuidedCuriosityEngine
 from epistemic_feedback import EpistemicFeedback
@@ -65,9 +66,11 @@ def server_capabilities():
         "explorer_temporal_v1":True,
         "format_bdr":True,
         "bit_analyze_structural_ingest_v1":True,
+        "device_structural_text_memory_v1":True,
     }
 class ShellHandler(BaseHTTPRequestHandler):
     config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; learner:LearningWorker; structural_ingest:StructuralIngestStatus; identity:ServerIdentity; audit:AuditLog; devices:DeviceRegistry; device_authority:DeviceAuthority; device_auth:DeviceAuthManager; enrollments:DeviceEnrollmentManager
+    device_structural_memory:DeviceStructuralMemory
     episode_write_lock=Lock()
     def _session_token(self):
         raw=self.headers.get("Cookie")
@@ -215,6 +218,7 @@ class ShellHandler(BaseHTTPRequestHandler):
         if self.device_auth.dispatch_public(self,path):return
         if self.enrollments.dispatch_public(self,path):return
         if self.device_auth.dispatch_device(self,path):return
+        if self.device_structural_memory.dispatch(self,path):return
         ok=self.auth.verify(self._session_token())
         if path=="/login":self._redirect("/") if ok else self._serve_static(SHELL_STATIC/"login.html");return
         if path in {"/login.css","/login.js"}:self._serve_static(static_target(path));return
@@ -262,7 +266,7 @@ def main():
     if a.host:c=ShellConfig(**{**c.__dict__,"host":a.host})
     if a.port:c=ShellConfig(**{**c.__dict__,"port":a.port})
     if not c.admin_password:raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
-    ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.identity=ServerIdentity(c.server_data_dir);ShellHandler.audit=AuditLog(c.server_data_dir);ShellHandler.devices=DeviceRegistry(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.device_authority=DeviceAuthority(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.devices.set_certificate_issuer(ShellHandler.device_authority.issue_certificate);ShellHandler.device_auth=DeviceAuthManager(ShellHandler.devices,ShellHandler.device_authority,ShellHandler.audit);ShellHandler.enrollments=DeviceEnrollmentManager(c.server_data_dir,ShellHandler.identity,ShellHandler.devices,ShellHandler.audit);ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.trajectories=EpistemicTrajectoryStore(str(Path(c.curiosity_data_dir)/"trajectories"));ShellHandler.structural_ingest=StructuralIngestStatus(c.bit_analyze_state_dir);ShellHandler.structural_bridge=StructuralObservationBridge(c.bit_analyze_state_dir,c.server_data_dir,c.memoria_api_url,c.memoria_api_key,interval_seconds=c.structural_bridge_interval_seconds,timeout_seconds=min(c.proxy_timeout_seconds,15.0));ShellHandler.curiosity=TrajectoryGuidedCuriosityEngine(c,ShellHandler.knowledge,ShellHandler.trajectories);ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
+    ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.identity=ServerIdentity(c.server_data_dir);ShellHandler.audit=AuditLog(c.server_data_dir);ShellHandler.devices=DeviceRegistry(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.device_authority=DeviceAuthority(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.devices.set_certificate_issuer(ShellHandler.device_authority.issue_certificate);ShellHandler.device_auth=DeviceAuthManager(ShellHandler.devices,ShellHandler.device_authority,ShellHandler.audit);ShellHandler.enrollments=DeviceEnrollmentManager(c.server_data_dir,ShellHandler.identity,ShellHandler.devices,ShellHandler.audit);ShellHandler.device_structural_memory=DeviceStructuralMemory(ShellHandler.device_auth,c.memoria_api_url,c.memoria_api_key,timeout_seconds=min(c.proxy_timeout_seconds,15.0));ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.trajectories=EpistemicTrajectoryStore(str(Path(c.curiosity_data_dir)/"trajectories"));ShellHandler.structural_ingest=StructuralIngestStatus(c.bit_analyze_state_dir);ShellHandler.structural_bridge=StructuralObservationBridge(c.bit_analyze_state_dir,c.server_data_dir,c.memoria_api_url,c.memoria_api_key,interval_seconds=c.structural_bridge_interval_seconds,timeout_seconds=min(c.proxy_timeout_seconds,15.0));ShellHandler.curiosity=TrajectoryGuidedCuriosityEngine(c,ShellHandler.knowledge,ShellHandler.trajectories);ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
     kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir,trajectories=ShellHandler.trajectories);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.learner=learner;ShellHandler.curiosity.start();learner.start();
     if c.structural_bridge_enabled:ShellHandler.structural_bridge.start()
     server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Device Registry + Device Enrollment + Device Auth + Audit Log + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback + Epistemic Trajectories")
