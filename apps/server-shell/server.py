@@ -62,7 +62,7 @@ def server_capabilities():
         "audit_log_v1":True,
         "server_identity_v1":True,
         "explorer_temporal_v1":True,
-        "format_bdr":False,
+        "format_bdr":True,
     }
 class ShellHandler(BaseHTTPRequestHandler):
     config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; identity:ServerIdentity; audit:AuditLog; devices:DeviceRegistry; device_authority:DeviceAuthority; device_auth:DeviceAuthManager; enrollments:DeviceEnrollmentManager
@@ -115,6 +115,68 @@ class ShellHandler(BaseHTTPRequestHandler):
         except (URLError,socket.timeout,TimeoutError):self._write_json(502,{"error":"upstream_unavailable"})
         finally:
             if serialized:self.episode_write_lock.release()
+    def _format_bdr(self):
+        if self.command!="POST":
+            self._write_json(405,{"error":"method_not_allowed"},{"Allow":"POST"});return
+        body=self._read_body()
+        if body is None:return
+        try:
+            payload=json.loads(body.decode() or "{}")
+        except Exception:
+            self._write_json(400,{"error":"invalid_request"});return
+        if str(payload.get("confirm") or "")!="FORMATAR":
+            self._write_json(400,{"error":"confirmation_required","detail":"Digite FORMATAR para confirmar."});return
+
+        was_enabled=bool(self.curiosity.state.enabled)
+        self.curiosity.action("pause")
+        upstream=None
+        try:
+            request_data=json.dumps({"confirm":"FORMATAR"},separators=(",",":")).encode()
+            headers={"Content-Type":"application/json","Accept":"application/json"}
+            if self.config.memoria_api_key:headers["X-Memoria-Key"]=self.config.memoria_api_key
+            req=Request(
+                self.config.memoria_api_url+"/api/v1/admin/format",
+                data=request_data,
+                headers=headers,
+                method="POST",
+            )
+            with self.episode_write_lock:
+                try:
+                    with urlopen(req,timeout=self.config.proxy_timeout_seconds) as response:
+                        raw=response.read()
+                        upstream=json.loads(raw.decode() or "{}")
+                except HTTPError as exc:
+                    raw=exc.read()
+                    try:detail=json.loads(raw.decode() or "{}")
+                    except Exception:detail={"detail":raw.decode(errors="replace")[:500]}
+                    self._write_json(exc.code,{"error":"format_upstream_rejected","upstream":detail})
+                    return
+                except (URLError,socket.timeout,TimeoutError):
+                    self._write_json(502,{"error":"format_upstream_unavailable"})
+                    return
+
+                if not isinstance(upstream,dict) or upstream.get("status")!="OK":
+                    self._write_json(502,{"error":"format_upstream_invalid_response","upstream":upstream})
+                    return
+
+                self.knowledge.reset()
+                trajectory_result=self.trajectories.reset()
+                curiosity_result=self.curiosity.reset_cognitive_state(enabled=was_enabled)
+
+            self._write_json(200,{
+                "schema":"memoria-server-format/v1",
+                "status":"ok",
+                "upstream":upstream,
+                "local":{
+                    "knowledge_reset":True,
+                    **trajectory_result,
+                    **curiosity_result,
+                },
+            })
+        finally:
+            if upstream is None and was_enabled:
+                self.curiosity.action("resume")
+
     def _login(self):
         if self.command!="POST":self._write_json(405,{"error":"method_not_allowed"},{"Allow":"POST"});return
         body=self._read_body()
@@ -154,6 +216,8 @@ class ShellHandler(BaseHTTPRequestHandler):
         if path=="/api/server/v1/capabilities":
             if self.command not in {"GET","HEAD"}:self._write_json(405,{"error":"method_not_allowed"},{"Allow":"GET, HEAD"});return
             self._write_json(200,server_capabilities());return
+        if path=="/api/server/v1/format-bdr":
+            self._format_bdr();return
         if path==IDENTITY_PATH:
             if self.command not in {"GET","HEAD"}:self._write_json(405,{"error":"method_not_allowed"},{"Allow":"GET, HEAD"});return
             self._write_json(200,self.identity.snapshot());return
