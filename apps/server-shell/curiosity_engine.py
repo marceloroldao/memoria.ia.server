@@ -114,6 +114,20 @@ class CuriosityEngine:
     def attach_knowledge(self, knowledge) -> None: self.knowledge=knowledge
     def start(self): self._thread.start()
     def stop(self): self._stop.set(); self._wake.set()
+    def reset_cognitive_state(self, *, enabled: bool | None=None) -> dict[str,object]:
+        previous_enabled=self.state.enabled
+        next_enabled=previous_enabled if enabled is None else bool(enabled)
+        with self._lock:
+            self._events.clear()
+            self._seen_urls.clear()
+            self._known_terms.clear()
+            self.walker=WebWalker(self._rng)
+            self.data_dir.mkdir(parents=True,exist_ok=True)
+            self.events_file.write_text("",encoding="utf-8")
+        self.state=CuriosityState(enabled=next_enabled,status="running" if next_enabled else "paused",reason="database_format")
+        self._save_state()
+        if next_enabled:self._wake.set()
+        return {"curiosity_reset":True,"raw_web_preserved":True,"enabled":next_enabled}
     def _load_state(self) -> CuriosityState:
         try:
             raw=json.loads(self.state_file.read_text(encoding="utf-8")); return CuriosityState(**{k:v for k,v in raw.items() if k in CuriosityState.__dataclass_fields__})
