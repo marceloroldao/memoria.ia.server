@@ -62,8 +62,7 @@ jobs:
 
       - name: Cold-open fixture with fixed Memoria and recovered BDR
         run: |
-          docker compose create --no-build memoria
-          IMAGE="$(docker compose images -q memoria)"
+          IMAGE="$(docker image ls -q memoria-ia-server-memoria:latest | head -n1)"
           test -n "$IMAGE"
           docker run --rm -i             -e MEMORIA_ORGANIZATION_ID=ci-recovery             -v bdw4-shadow:/data             --entrypoint python             "$IMAGE" - <<'PY'
           from pathlib import Path
