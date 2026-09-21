@@ -202,6 +202,16 @@ for path in paths:
     complete_bytes = pos
     seq_head = sequences[:20]
     seq_tail = sequences[-20:] if len(sequences) > 20 else list(sequences)
+    bounded_single_adjacent_duplicate_compatible = bool(
+        not torn_tail
+        and complete_bytes == len(data)
+        and frame == len(sequences)
+        and bool(sequences)
+        and sequences[0] == 1
+        and duplicate_count == 1
+        and regression_count == 0
+        and forward_gap_count == 0
+    )
 
     reports.append({
         "path":str(path),
@@ -220,6 +230,7 @@ for path in paths:
         "first_strict_or_structural_error":first_error,
         "legacy_head_duplicate_1_1":legacy_head_duplicate,
         "bounded_rc3_compatible":bool(compatible and legacy_head_duplicate and not torn_tail),
+        "bounded_single_adjacent_duplicate_compatible":bounded_single_adjacent_duplicate_compatible,
         "torn_tail":torn_tail,
     })
 
