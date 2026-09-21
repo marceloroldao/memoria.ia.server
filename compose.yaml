@@ -32,7 +32,7 @@ services:
       context: .
       dockerfile: docker/memoria/Dockerfile
       args:
-        MEMORIA_COMMIT: ${MEMORIA_COMMIT:-21a33b59db2568ca49d41dd48e11a7e89aeb08c2}
+        MEMORIA_COMMIT: ${MEMORIA_COMMIT:-3474e555ba57bbee12a7099dfc9b157570b6b713}
         BDR_COMMIT: ${BDR_COMMIT:-d09914b85646353d8fd004ccf99e96a94fab9eef}
     environment:
       MEMORIA_ORGANIZATION_ID: ${MEMORIA_ORGANIZATION_ID}
@@ -111,7 +111,7 @@ services:
       context: .
       dockerfile: docker/bit-analyze/Dockerfile
       args:
-        BIT_ANALYZE_COMMIT: ${BIT_ANALYZE_COMMIT:-3c35c7a8b03e77fd553bbbbea0f5595d8696ab13}
+        BIT_ANALYZE_COMMIT: ${BIT_ANALYZE_COMMIT:-37bf433aa69c7451fadad67d4b7aebabe697176e}
     environment:
       BIT_ANALYZE_STATE_DIR: /state
       BIT_ANALYZE_SPOOL: /source/curiosity/raw-web/bit-analyze-ingest.jsonl

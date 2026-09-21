@@ -38,9 +38,12 @@ jobs:
           sh -n scripts/uninstall.sh
           bash -n scripts/test-bit-analyze-pipeline.sh
           bash -n scripts/test-continuous-structural-ab.sh
+          bash -n scripts/test-physical-temporal-pipeline.sh
       - name: Build deployment images
         run: docker compose build
       - name: Validate bit.analyze to structural association runtime
         run: STRUCTURAL_RUNTIME_SMOKE=1 bash scripts/test-bit-analyze-pipeline.sh
       - name: Compare continuous structural decay on real events
         run: bash scripts/test-continuous-structural-ab.sh
+      - name: Validate physical temporal pipeline end to end
+        run: bash scripts/test-physical-temporal-pipeline.sh
