@@ -17,6 +17,7 @@ from urllib.parse import quote_plus, urlparse
 from urllib.request import Request, urlopen
 
 from epistemic_curiosity import choose_epistemic_topic
+from raw_page_capture import RawPageCaptureStore, decode_web_bytes, inventory_resources
 from search_probe import SearchProbe
 from search_providers import wikipedia_results
 from web_walker import WebWalker
@@ -106,6 +107,7 @@ class CuriosityEngine:
         self._lock=Lock(); self._wake=Event(); self._stop=Event(); self._events=deque(maxlen=500)
         self._seen_urls=set(); self._known_terms=set(); self._rng=random.Random(config.curiosity_seed or None)
         self.walker=WebWalker(self._rng)
+        self.capture_store=RawPageCaptureStore(self.data_dir/"raw-web")
         self.state=self._load_state(); self.state.enabled=config.curiosity_enabled
         self.data_dir.mkdir(parents=True, exist_ok=True); self._load_recent_events()
         self._thread=Thread(target=self._loop, daemon=True, name="curiosity-engine")
@@ -137,19 +139,33 @@ class CuriosityEngine:
         if self.state.hour_bucket != bucket: self.state.hour_bucket=bucket; self.state.requests_this_hour=0
         if self.state.requests_this_hour >= self.config.curiosity_max_requests_hour: return False
         self.state.requests_this_hour += 1; return True
-    def _get(self, url: str, max_bytes: int | None=None, accept_json: bool=False) -> tuple[str,str]:
+    def _get_bytes(self, url: str, max_bytes: int | None=None, accept_json: bool=False) -> tuple[bytes,str,str]:
         _assert_external_url(url)
         if not self._budget(): raise RuntimeError("hourly request budget reached")
         accept = "application/json,text/plain;q=0.9,*/*;q=0.1" if accept_json else "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1"
-        req=Request(url,headers={"User-Agent":"MemoriaIA-Curiosity/2.1 (+bounded-public-web-research)","Accept":accept,"Accept-Language":"pt-BR,pt;q=0.9,en;q=0.7"})
+        req=Request(url,headers={"User-Agent":"MemoriaIA-Curiosity/2.2 (+lossless-public-web-capture)","Accept":accept,"Accept-Language":"pt-BR,pt;q=0.9,en;q=0.7"})
+        limit=max_bytes or self.config.curiosity_max_page_bytes
         with urlopen(req,timeout=self.config.curiosity_http_timeout) as r:
             final_url=r.geturl()
             if final_url != url: _assert_external_url(final_url)
             ctype=r.headers.get("Content-Type","")
             allowed = ("application/json" in ctype) if accept_json else ("text/html" in ctype or "text/plain" in ctype)
             if not allowed: raise ValueError(f"unsupported content type: {ctype}")
-            data=r.read(max_bytes or self.config.curiosity_max_page_bytes)
-            return data.decode("utf-8",errors="replace"), ctype
+            length=r.headers.get("Content-Length")
+            if length:
+                try:
+                    if int(length) > limit:
+                        raise ValueError(f"full response exceeds configured capture limit ({length}>{limit} bytes)")
+                except ValueError as exc:
+                    if "capture limit" in str(exc): raise
+            data=r.read(limit+1)
+            if len(data) > limit:
+                raise ValueError(f"full response exceeds configured capture limit (>{limit} bytes)")
+            return data,ctype,final_url
+
+    def _get(self, url: str, max_bytes: int | None=None, accept_json: bool=False) -> tuple[str,str]:
+        data,ctype,_=self._get_bytes(url,max_bytes,accept_json)
+        return decode_web_bytes(data,ctype),ctype
     def _search_duckduckgo(self, topic: str) -> list[tuple[str,str]]:
         endpoint=self.config.curiosity_search_url.replace("{query}",quote_plus(topic)).replace("QUERY",quote_plus(topic)); html,_=self._get(endpoint,750_000); parser=SearchProbe(); parser.feed(html)
         dedup=[]; seen=set()
@@ -175,10 +191,34 @@ class CuriosityEngine:
             self._event("provider_fallback",f"Sem resultados em {name}; tentando próxima fonte.",topic=topic,provider=name)
         self.state.last_provider=None; self._event("search_empty","Todos os provedores retornaram zero resultados utilizáveis.",topic=topic,provider="all"); return []
     def _read(self, url: str) -> dict[str,object]:
-        html,_=self._get(url); parser=PageHTML(); parser.feed(html); text=parser.text[:self.config.curiosity_text_limit]; counts={}
-        for w in _words(parser.title+" "+parser.description+" "+text): counts[w]=counts.get(w,0)+1
-        terms=[w for w,n in sorted(counts.items(),key=lambda x:(-x[1],x[0])) if n>=2][:12]; offered=self.walker.offer_page_links(url,html,max_links=16); self.state.pages_read += 1
-        return {"url":url,"domain":urlparse(url).netloc,"title":parser.title[:300],"description":parser.description[:1000],"excerpt":text[:1800],"terms":terms,"links_offered":offered}
+        body,ctype,final_url=self._get_bytes(url)
+        html=decode_web_bytes(body,ctype)
+        resources=inventory_resources(html,final_url) if "html" in ctype else []
+        capture=self.capture_store.capture(
+            requested_url=url,
+            final_url=final_url,
+            content_type=ctype,
+            body=body,
+            resources=resources,
+        )
+        parser=PageHTML(); parser.feed(html); full_text=parser.text; counts={}
+        for w in _words(parser.title+" "+parser.description+" "+full_text): counts[w]=counts.get(w,0)+1
+        terms=[w for w,n in sorted(counts.items(),key=lambda x:(-x[1],x[0])) if n>=2][:12]
+        offered=self.walker.offer_page_links(final_url,html,max_links=16) if "html" in ctype else 0
+        self.state.pages_read += 1
+        return {
+            "url":final_url,
+            "requested_url":url,
+            "domain":urlparse(final_url).netloc,
+            "title":parser.title[:300],
+            "description":parser.description[:1000],
+            "excerpt":full_text[:1800],
+            "terms":terms,
+            "links_offered":offered,
+            "raw_capture":capture,
+            "raw_bytes":len(body),
+            "resource_count":len(resources),
+        }
     def _choose_topic(self) -> tuple[str,str]:
         trajectory=self.state.trajectory[-12:]; force=self.state.stagnation >= self.config.curiosity_stagnation_limit
         # Knowledge gaps are the default steering signal. Random/stagnation jumps remain
@@ -189,24 +229,31 @@ class CuriosityEngine:
                 topic,target=selected
                 self._event("epistemic_target",f"Lacuna epistêmica selecionada: {topic}",topic=topic,**target)
                 return topic,"epistemic_gap"
+        if not force and self.walker.frontier:
+            label=str(self.walker.frontier[0][0] or "trilha web")
+            return label,"web_frontier"
         jump=force or not self.state.current_topic or self._rng.random() < self.config.curiosity_random_jump_rate
         if jump:
             candidates=[s for s in SEEDS if s not in trajectory] or SEEDS; topic=self._rng.choice(candidates); self.state.jumps += int(bool(self.state.current_topic)); return topic,"stagnation_jump" if force else "random_jump"
-        recent_terms=[]
-        with self._lock:
-            for event in list(self._events)[-20:]: recent_terms.extend(event.get("terms",[]) or [])
-        options=[t for t in dict.fromkeys(recent_terms) if t != self.state.current_topic and t not in trajectory]
-        if options:return self._rng.choice(options),"novel_neighbor"
         return self.state.current_topic,"continue"
+    def _results_for(self, topic: str, reason: str) -> list[tuple[str,str]]:
+        if reason == "web_frontier":
+            results=self.walker.next_candidates(self.config.curiosity_results_per_search)
+            if results:
+                self.state.last_provider="web_walker"
+                self._event("search_results",f"Web Walker retornou {len(results)} endereço(s) da fronteira.",topic=topic,provider="web_walker",results=len(results))
+                return results
+        return self._search(topic)
+
     def cycle_once(self):
         topic,reason=self._choose_topic(); self.state.current_topic=topic; self.state.reason=reason; self.state.status="searching"; self.state.cycle += 1; self.state.last_cycle_at=_now(); self.state.trajectory=(self.state.trajectory+[topic])[-50:]
-        self._event("topic",f"Pesquisando: {topic}",topic=topic,reason=reason,cycle=self.state.cycle); results=self._search(topic); discoveries=0
+        self._event("topic",f"Pesquisando: {topic}",topic=topic,reason=reason,cycle=self.state.cycle); results=self._results_for(topic,reason); discoveries=0
         for title,url in results:
             if url in self._seen_urls: continue
             self._seen_urls.add(url)
             try:
                 page=self._read(url); terms=list(page["terms"]); novelty=len([t for t in terms if t not in self._known_terms])/max(1,len(terms)); self._known_terms.update(terms)
-                page.update({"kind":"evidence","message":str(page["title"] or title),"topic":topic,"novelty":round(novelty,3),"epistemic_status":"web_observation","confidence":0.25,"provider":self.state.last_provider}); self._event(**page); discoveries += int(novelty >= self.config.curiosity_novelty_threshold)
+                page.update({"kind":"evidence","message":str(page["title"] or title),"topic":topic,"novelty":round(novelty,3),"novelty_basis":"derived_terms_pending_bit_analyze","epistemic_status":"web_observation","confidence":0.25,"provider":self.state.last_provider}); self._event(**page); discoveries += int(novelty >= self.config.curiosity_novelty_threshold)
                 if page.get("links_offered"):self._event("web_walk_frontier",f"Adicionados {page['links_offered']} links à trilha de navegação.",topic=topic,url=url,provider=self.state.last_provider,frontier=len(self.walker.frontier))
                 if discoveries:break
             except Exception as exc:self.state.errors += 1;self._event("page_error",str(exc),url=url,topic=topic,provider=self.state.last_provider)
@@ -224,7 +271,7 @@ class CuriosityEngine:
     def snapshot(self, after: int=0) -> dict[str,object]:
         with self._lock:events=list(self._events)
         if after>0:events=events[after:]
-        return {"schema":"memoria-curiosity/v2","state":asdict(self.state),"configuration":{"interval_seconds":self.config.curiosity_interval_seconds,"max_requests_hour":self.config.curiosity_max_requests_hour,"random_jump_rate":self.config.curiosity_random_jump_rate,"stagnation_limit":self.config.curiosity_stagnation_limit,"epistemic_steering":self.knowledge is not None,"web_enabled":True,"providers":["duckduckgo","wikipedia","web_walker"],"walker_frontier":len(self.walker.frontier)},"events":events,"event_count":len(self._events)}
+        return {"schema":"memoria-curiosity/v2","state":asdict(self.state),"configuration":{"interval_seconds":self.config.curiosity_interval_seconds,"max_requests_hour":self.config.curiosity_max_requests_hour,"random_jump_rate":self.config.curiosity_random_jump_rate,"stagnation_limit":self.config.curiosity_stagnation_limit,"epistemic_steering":self.knowledge is not None,"web_enabled":True,"raw_capture":True,"bit_analyze_ingest":"queued","providers":["duckduckgo","wikipedia","web_walker"],"walker_frontier":len(self.walker.frontier)},"events":events,"event_count":len(self._events)}
     def action(self, action: str):
         if action == "pause":self.state.enabled=False;self.state.status="paused"
         elif action == "resume":self.state.enabled=True;self.state.status="running";self._wake.set()
