@@ -256,7 +256,7 @@ docker run --rm -v "$SHADOW_VOLUME:/target" -v "$BACKUP:/backup:ro" alpine:3.20 
 ORG_ID="$(awk -F= '$1=="MEMORIA_ORGANIZATION_ID"{sub(/^[^=]*=/,"");print;exit}' .env)"
 test -n "$ORG_ID"
 
-docker run --rm   -e MEMORIA_ORGANIZATION_ID="$ORG_ID"   -v "$SHADOW_VOLUME:/data"   --entrypoint python   "$NEW_MEMORIA_IMAGE" - <<'PY'
+docker run --rm -i   -e MEMORIA_ORGANIZATION_ID="$ORG_ID"   -v "$SHADOW_VOLUME:/data"   --entrypoint python   "$NEW_MEMORIA_IMAGE" - <<'PY'
 import os
 from pathlib import Path
 from memoria_resolutiva.native_runtime import NativeRuntime
