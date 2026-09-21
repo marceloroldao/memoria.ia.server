@@ -149,6 +149,96 @@ assert abs(continuous_weight - expected) < 1e-12, (
     expected,
 )
 
+# The continuous field must preserve a strict causal gradient over the real
+# opaque symbols. This checks the field geometry without introducing semantic
+# classes, promotion thresholds, grammar rules, or hand-authored relations.
+anchors = [int(event["trail"][0]) for event in events]
+for anchor in anchors:
+    occurrences = sum(anchor in event["trail"] for event in events)
+    assert occurrences == 1, (anchor, occurrences)
+
+source_mass = events[0]["trail"].count(source) / float(len(events[0]["trail"]))
+normalized_gradient = []
+for lag in range(1, len(events)):
+    candidate = anchors[lag]
+    candidate_mass = events[lag]["trail"].count(candidate) / float(
+        len(events[lag]["trail"])
+    )
+    observed = continuous.association(
+        hierarchy_id,
+        source,
+        candidate,
+        channel="temporal",
+    )
+    predicted = (
+        math.exp(-0.2 * float(lag - 1))
+        * source_mass
+        * candidate_mass
+    )
+    assert abs(observed - predicted) < 1e-12, (
+        lag,
+        observed,
+        predicted,
+    )
+    normalized_gradient.append(observed / (source_mass * candidate_mass))
+
+assert all(
+    left > right
+    for left, right in zip(normalized_gradient, normalized_gradient[1:])
+), normalized_gradient
+
+# Repetition must concentrate support naturally. A recurring adjacent pair
+# should outrank sparse, rotating distractors using only the same temporal
+# dynamics. The test deliberately adds no semantic labels or special-case
+# relation rules.
+selective = ContinuousStructuralAssociationField(
+    within_decay=0.35,
+    temporal_decay=0.35,
+    forgetting_rate=0.03,
+    trace_floor=1e-8,
+)
+sequence = []
+for cycle in range(48):
+    sequence.extend((0, 1, 2 + (cycle % (len(events) - 2))))
+
+for index, event_index in enumerate(sequence):
+    event = events[event_index]
+    selective.observe(
+        {
+            "format": "memoria.ia-structural-observation-v1",
+            "observation_id": (
+                f"continuous-selective:{index}:{event_index}:"
+                f"{event['signature']}"
+            ),
+            "event": event,
+            "provenance": {"hierarchy_id": hierarchy_id},
+            "semantic_projection": False,
+        }
+    )
+
+repeated_target = anchors[1]
+repeated_weight = selective.association(
+    hierarchy_id,
+    source,
+    repeated_target,
+    channel="temporal",
+)
+distractor_weights = {
+    anchor: selective.association(
+        hierarchy_id,
+        source,
+        anchor,
+        channel="temporal",
+    )
+    for anchor in anchors[2:]
+}
+strongest_distractor = max(distractor_weights.values())
+assert repeated_weight > strongest_distractor, (
+    repeated_weight,
+    strongest_distractor,
+    distractor_weights,
+)
+
 # The new field must remain deterministic over the same real StructuralEvents.
 replay = ContinuousStructuralAssociationField(
     within_decay=0.2,
