@@ -39,5 +39,5 @@ jobs:
           bash -n scripts/test-bit-analyze-pipeline.sh
       - name: Build deployment images
         run: docker compose build
-      - name: Validate bit.analyze raw-ingest pipeline
-        run: bash scripts/test-bit-analyze-pipeline.sh
+      - name: Validate bit.analyze to structural association runtime
+        run: STRUCTURAL_RUNTIME_SMOKE=1 bash scripts/test-bit-analyze-pipeline.sh
