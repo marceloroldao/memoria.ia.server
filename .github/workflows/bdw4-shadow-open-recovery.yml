@@ -2,7 +2,7 @@ name: BDW4 shadow-open recovery gate
 
 on:
   push:
-    branches: [deploy/recover-bdw4-single-duplicate]
+    branches: [main, deploy/recover-bdw4-single-duplicate]
     paths:
       - 'deploy/recover-bdw4-single-duplicate.sh'
       - '.github/workflows/bdw4-shadow-open-recovery.yml'
