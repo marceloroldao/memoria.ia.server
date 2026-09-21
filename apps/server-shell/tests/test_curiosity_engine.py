@@ -72,3 +72,23 @@ def test_search_falls_back_when_primary_provider_returns_nothing(tmp_path, monke
     assert results
     assert engine.state.last_provider == "wikipedia"
     assert any(e["kind"] == "provider_fallback" for e in engine.snapshot()["events"])
+
+
+def test_read_preserves_full_raw_body_before_derived_text_view(tmp_path):
+    engine = CuriosityEngine(config(tmp_path))
+    body = (
+        b"<html><head><title>Teste</title><script>window.hidden='kept';</script></head>"
+        b"<body><nav>Menu principal Menu principal</nav><p>conteudo repetido conteudo repetido</p>"
+        b"<img src='/image.png'></body></html>"
+    )
+    engine._get_bytes = lambda url, max_bytes=None, accept_json=False: (
+        body, "text/html; charset=utf-8", "https://example.test/page"
+    )
+    page = engine._read("https://example.test/page")
+    capture = page["raw_capture"]
+    stored = Path(tmp_path) / "raw-web" / capture["object_path"]
+    assert stored.read_bytes() == body
+    assert b"window.hidden='kept'" in stored.read_bytes()
+    assert page["resource_count"] == 1
+    assert capture["bit_analyze_status"] == "queued"
+    assert "Menu principal" in page["excerpt"]

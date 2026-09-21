@@ -49,7 +49,9 @@ class WebWalker:
         for title,url in candidates[:max_links]:self.offer(title,url)
         return min(len(candidates),max_links)
     def _domain_ready(self,url):
-        domain=urlparse(url).netloc.casefold(); return (time.monotonic()-self.domain_last_visit.get(domain,0.0))>=self.domain_cooldown_seconds
+        domain=urlparse(url).netloc.casefold()
+        if domain not in self.domain_last_visit:return True
+        return (time.monotonic()-self.domain_last_visit[domain])>=self.domain_cooldown_seconds
     def _accept(self,title,url):
         self.queued.discard(url); self.seen.add(url); domain=urlparse(url).netloc.casefold(); self.domain_last_visit[domain]=time.monotonic(); self.domain_visits[domain]=self.domain_visits.get(domain,0)+1; return title,url
     def next_candidates(self,limit:int=3):

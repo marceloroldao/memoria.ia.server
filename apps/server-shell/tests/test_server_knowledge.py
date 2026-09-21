@@ -13,10 +13,11 @@ def test_related_terms_are_formed_from_same_observation(tmp_path):
     k=ServerKnowledge(str(tmp_path/"knowledge")); result=k.learn_from_evidence(evidence()); hit=k.query("BLDC")["hits"][0]
     assert set(result["keys"])=={"bldc","motor","controle"}; assert {"motor","controle"}.issubset(dict(hit["related"]))
 
-def test_wikipedia_navigation_terms_remain_addressed_but_low_weight(tmp_path):
+def test_repeated_page_terms_are_not_semantically_suppressed_by_provider_rules(tmp_path):
     k=ServerKnowledge(str(tmp_path/"knowledge")); k.learn_from_evidence(evidence(terms=["bldc","motor","editar","página"]));
     editar=next(x for x in k.recent()["items"] if x["key"]=="editar"); bldc=next(x for x in k.recent()["items"] if x["key"]=="bldc")
-    assert editar["semantic_weight"]<bldc["semantic_weight"] and editar["semantic_class"]=="interface_noise"
+    assert editar["semantic_weight"]==bldc["semantic_weight"]==1.0
+    assert editar["semantic_class"]==bldc["semantic_class"]=="content"
 
 class FakeBDR:
     def __init__(self,rows=None):self.rows=list(rows or []);self.writes=[]

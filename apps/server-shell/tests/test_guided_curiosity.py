@@ -93,3 +93,17 @@ def test_epistemic_target_may_contain_topic_without_duplicate_keyword(tmp_path, 
     assert events[-1]["kind"] == "epistemic_target"
     assert events[-1]["topic"] == "cache"
     assert events[-1]["observations"] == 3
+
+
+def test_unreinforced_terms_do_not_hijack_real_web_frontier(tmp_path):
+    store = SnapshotStore({"active": [], "closed": []})
+    engine = TrajectoryGuidedCuriosityEngine(config(tmp_path), trajectories=store)
+    engine.state.current_topic = "sensores"
+    engine.walker.offer("Página descoberta", "https://example.org/discovered")
+    topic, reason = engine._choose_topic()
+    assert topic == "Página descoberta"
+    assert reason == "web_frontier"
+
+    results = engine._results_for(topic, reason)
+    assert results == [("Página descoberta", "https://example.org/discovered")]
+    assert engine.state.last_provider == "web_walker"

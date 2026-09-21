@@ -37,7 +37,7 @@ class ShellConfig:
     curiosity_stagnation_limit: int = 3
     curiosity_results_per_search: int = 5
     curiosity_http_timeout: float = 12.0
-    curiosity_max_page_bytes: int = 1_500_000
+    curiosity_max_page_bytes: int = 8 * 1024 * 1024
     curiosity_text_limit: int = 20_000
     curiosity_novelty_threshold: float = 0.25
     curiosity_seed: int = 0

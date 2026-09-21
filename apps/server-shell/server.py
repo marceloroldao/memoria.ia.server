@@ -62,10 +62,10 @@ def server_capabilities():
         "audit_log_v1":True,
         "server_identity_v1":True,
         "explorer_temporal_v1":True,
-        "format_bdr":False,
+        "format_bdr":True,
     }
 class ShellHandler(BaseHTTPRequestHandler):
-    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; identity:ServerIdentity; audit:AuditLog; devices:DeviceRegistry; device_authority:DeviceAuthority; device_auth:DeviceAuthManager; enrollments:DeviceEnrollmentManager
+    config=ShellConfig(); auth:AuthManager; autotests:AutonomousTestManager; curiosity:TrajectoryGuidedCuriosityEngine; knowledge:ServerKnowledge; site_ingest:SiteIngestManager; growth:GrowthDiagnostics; trajectories:EpistemicTrajectoryStore; learner:LearningWorker; identity:ServerIdentity; audit:AuditLog; devices:DeviceRegistry; device_authority:DeviceAuthority; device_auth:DeviceAuthManager; enrollments:DeviceEnrollmentManager
     episode_write_lock=Lock()
     def _session_token(self):
         raw=self.headers.get("Cookie")
@@ -115,6 +115,73 @@ class ShellHandler(BaseHTTPRequestHandler):
         except (URLError,socket.timeout,TimeoutError):self._write_json(502,{"error":"upstream_unavailable"})
         finally:
             if serialized:self.episode_write_lock.release()
+    def _format_bdr(self):
+        if self.command!="POST":
+            self._write_json(405,{"error":"method_not_allowed"},{"Allow":"POST"});return
+        body=self._read_body()
+        if body is None:return
+        try:
+            payload=json.loads(body.decode() or "{}")
+        except Exception:
+            self._write_json(400,{"error":"invalid_request"});return
+        if str(payload.get("confirm") or "")!="FORMATAR":
+            self._write_json(400,{"error":"confirmation_required","detail":"Digite FORMATAR para confirmar."});return
+
+        was_enabled=bool(self.curiosity.state.enabled)
+        self.curiosity.action("pause")
+        formatted=False
+        try:
+            request_data=json.dumps({"confirm":"FORMATAR"},separators=(",",":")).encode()
+            headers={"Content-Type":"application/json","Accept":"application/json"}
+            if self.config.memoria_api_key:
+                headers["X-Memoria-Key"]=self.config.memoria_api_key
+            req=Request(
+                self.config.memoria_api_url+"/api/v1/admin/format",
+                data=request_data,
+                headers=headers,
+                method="POST",
+            )
+            with self.learner.format_guard():
+                with self.episode_write_lock:
+                    try:
+                        with urlopen(req,timeout=self.config.proxy_timeout_seconds) as response:
+                            raw=response.read()
+                            upstream=json.loads(raw.decode() or "{}")
+                    except HTTPError as exc:
+                        raw=exc.read()
+                        try:detail=json.loads(raw.decode() or "{}")
+                        except Exception:detail={"detail":raw.decode(errors="replace")[:500]}
+                        self._write_json(exc.code,{"error":"format_upstream_rejected","upstream":detail})
+                        return
+                    except (URLError,socket.timeout,TimeoutError):
+                        self._write_json(502,{"error":"format_upstream_unavailable"})
+                        return
+
+                    if not isinstance(upstream,dict) or upstream.get("status")!="OK":
+                        self._write_json(502,{"error":"format_upstream_invalid_response","upstream":upstream})
+                        return
+                    formatted=True
+
+                    self.knowledge.reset()
+                    trajectory_result=self.trajectories.reset()
+                    curiosity_result=self.curiosity.reset_cognitive_state(enabled=was_enabled)
+                    learner_result=self.learner.reset_after_format()
+
+            self._write_json(200,{
+                "schema":"memoria-server-format/v1",
+                "status":"ok",
+                "upstream":upstream,
+                "local":{
+                    "knowledge_reset":True,
+                    **trajectory_result,
+                    **curiosity_result,
+                    **learner_result,
+                },
+            })
+        finally:
+            if not formatted and was_enabled:
+                self.curiosity.action("resume")
+
     def _login(self):
         if self.command!="POST":self._write_json(405,{"error":"method_not_allowed"},{"Allow":"POST"});return
         body=self._read_body()
@@ -154,6 +221,8 @@ class ShellHandler(BaseHTTPRequestHandler):
         if path=="/api/server/v1/capabilities":
             if self.command not in {"GET","HEAD"}:self._write_json(405,{"error":"method_not_allowed"},{"Allow":"GET, HEAD"});return
             self._write_json(200,server_capabilities());return
+        if path=="/api/server/v1/format-bdr":
+            self._format_bdr();return
         if path==IDENTITY_PATH:
             if self.command not in {"GET","HEAD"}:self._write_json(405,{"error":"method_not_allowed"},{"Allow":"GET, HEAD"});return
             self._write_json(200,self.identity.snapshot());return
@@ -187,7 +256,7 @@ def main():
     if a.port:c=ShellConfig(**{**c.__dict__,"port":a.port})
     if not c.admin_password:raise RuntimeError("MEMORIA_SERVER_ADMIN_PASSWORD is required")
     ShellHandler.config=c;ShellHandler.auth=AuthManager(c.admin_username,c.admin_password,session_seconds=c.session_hours*3600);ShellHandler.autotests=AutonomousTestManager(c);ShellHandler.identity=ServerIdentity(c.server_data_dir);ShellHandler.audit=AuditLog(c.server_data_dir);ShellHandler.devices=DeviceRegistry(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.device_authority=DeviceAuthority(c.server_data_dir,ShellHandler.identity,ShellHandler.audit);ShellHandler.devices.set_certificate_issuer(ShellHandler.device_authority.issue_certificate);ShellHandler.device_auth=DeviceAuthManager(ShellHandler.devices,ShellHandler.device_authority,ShellHandler.audit);ShellHandler.enrollments=DeviceEnrollmentManager(c.server_data_dir,ShellHandler.identity,ShellHandler.devices,ShellHandler.audit);ShellHandler.knowledge=ServerKnowledge(str(Path(c.curiosity_data_dir).parent/"knowledge"));ShellHandler.trajectories=EpistemicTrajectoryStore(str(Path(c.curiosity_data_dir)/"trajectories"));ShellHandler.curiosity=TrajectoryGuidedCuriosityEngine(c,ShellHandler.knowledge,ShellHandler.trajectories);ShellHandler.site_ingest=SiteIngestManager(ShellHandler.curiosity,max_pages=200,max_depth=5);ShellHandler.growth=GrowthDiagnostics(c,ShellHandler.curiosity,ShellHandler.knowledge,write_lock=ShellHandler.episode_write_lock)
-    kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir,trajectories=ShellHandler.trajectories);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Device Registry + Device Enrollment + Device Auth + Audit Log + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback + Epistemic Trajectories")
+    kb=KnowledgeBDR(c.memoria_api_url,c.memoria_api_key,timeout=min(c.proxy_timeout_seconds,15.0),write_lock=ShellHandler.episode_write_lock);feedback=EpistemicFeedback(ShellHandler.knowledge,ShellHandler.curiosity,c.curiosity_data_dir,trajectories=ShellHandler.trajectories);learner=LearningWorker(ShellHandler.knowledge,c.curiosity_data_dir,bdr=kb,feedback=feedback);ShellHandler.learner=learner;ShellHandler.curiosity.start();learner.start();server=ThreadingHTTPServer((c.host,c.port),ShellHandler);print(f"Memoria.ia Server: http://{c.host}:{c.port}");print("Modules: Memoria Admin + BDR Explorer + Device Registry + Device Enrollment + Device Auth + Audit Log + Curiosity Engine + Server Knowledge + Site Ingest + Growth Diagnostics + Epistemic Feedback + Epistemic Trajectories")
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:learner.stop();ShellHandler.curiosity.stop();server.server_close()
