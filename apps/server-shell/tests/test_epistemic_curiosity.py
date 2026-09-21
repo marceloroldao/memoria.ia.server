@@ -9,25 +9,26 @@ def ev(terms, provider="web", url="https://example.org/a"):
     return {"kind":"evidence","title":"test","description":"test evidence","terms":terms,"provider":provider,"url":url}
 
 
-def test_weakly_supported_content_is_prioritized(tmp_path):
+def test_single_observation_is_remembered_but_not_promoted_to_target(tmp_path):
     k=ServerKnowledge(str(tmp_path/"knowledge"))
     k.learn_from_evidence(ev(["fraco","vizinho"]))
-    for n,provider in enumerate(["web","wikipedia","arxiv","nasa"]):
-        k.learn_from_evidence(ev(["forte","estavel"],provider,f"https://example.org/{n}"))
-    ranked=rank_epistemic_targets(k)
-    assert ranked[0]["topic"] in {"fraco","vizinho"}
-    assert ranked[0]["epistemic_need"] > next(x for x in ranked if x["topic"]=="forte")["epistemic_need"]
+    assert {x["key"] for x in k.recent()["items"]} >= {"fraco","vizinho"}
+    assert rank_epistemic_targets(k) == []
 
 
-def test_interface_noise_does_not_steer_research(tmp_path):
+def test_reinforcement_makes_address_eligible_without_vocabulary_rules(tmp_path):
     k=ServerKnowledge(str(tmp_path/"knowledge"))
-    k.learn_from_evidence(ev(["editar","bldc"],"wikipedia"))
+    k.learn_from_evidence(ev(["editar","bldc"],"wikipedia","https://example.org/a"))
+    k.learn_from_evidence(ev(["editar","bldc"],"wikipedia","https://example.org/b"))
     topics={x["topic"] for x in rank_epistemic_targets(k)}
-    assert "bldc" in topics and "editar" not in topics
+    assert {"editar","bldc"}.issubset(topics)
+    assert all(x["reinforcement_ready"] is True for x in rank_epistemic_targets(k))
 
 
 def test_trajectory_avoids_immediate_research_loop(tmp_path):
-    k=ServerKnowledge(str(tmp_path/"knowledge")); k.learn_from_evidence(ev(["alpha","beta"]))
+    k=ServerKnowledge(str(tmp_path/"knowledge"))
+    k.learn_from_evidence(ev(["alpha","beta"],url="https://example.org/a"))
+    k.learn_from_evidence(ev(["alpha","beta"],url="https://example.org/b"))
     first=rank_epistemic_targets(k)[0]["topic"]
     chosen=choose_epistemic_topic(k,trajectory=[first])
     assert chosen is not None and chosen[0] != first
