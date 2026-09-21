@@ -2,7 +2,8 @@
 set -Eeuo pipefail
 
 ROOT="$(mktemp -d)"
-trap 'rm -rf "$ROOT"' EXIT
+trap 'rc=$?; rm -rf "$ROOT"; exit $rc' EXIT
+trap 'rc=$?; echo "bit.analyze pipeline smoke FAILED rc=$rc line=$LINENO command=$BASH_COMMAND" >&2' ERR
 SOURCE="$ROOT/source/curiosity/raw-web"
 STATE="$ROOT/state"
 mkdir -p "$SOURCE/objects/sha256" "$STATE/checkpoints"
@@ -40,8 +41,12 @@ with open(path, "w", encoding="utf-8") as fh:
     fh.write(json.dumps(record, separators=(",", ":")) + "\n")
 PY
 
-IMAGE="$(docker compose images -q bit-analyze)"
-test -n "$IMAGE"
+IMAGE="${BIT_ANALYZE_TEST_IMAGE:-memoria-ia-server-bit-analyze}"
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "bit.analyze pipeline smoke: built image not found: $IMAGE" >&2
+  docker image ls --format '{{.Repository}}:{{.Tag}} {{.ID}}' >&2
+  exit 1
+fi
 
 docker run --rm --network none \
   -v "$ROOT/source:/source:ro" \
