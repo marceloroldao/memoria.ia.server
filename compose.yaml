@@ -159,6 +159,7 @@ services:
       MEMORIA_SERVER_SESSION_HOURS: ${MEMORIA_SERVER_SESSION_HOURS:-8}
       MEMORIA_SERVER_COOKIE_SECURE: ${MEMORIA_SERVER_COOKIE_SECURE:-false}
       MEMORIA_SERVER_DATA_DIR: /data
+      BIT_ANALYZE_STATE_DIR: /bit-analyze
       MEMORIA_API_KEY: ${MEMORIA_API_KEY}
       MEMORIA_CURIOSITY_ENABLED: ${MEMORIA_CURIOSITY_ENABLED:-true}
       MEMORIA_CURIOSITY_DATA_DIR: /data/curiosity
@@ -175,6 +176,7 @@ services:
       MEMORIA_CURIOSITY_SEARCH_URL: ${MEMORIA_CURIOSITY_SEARCH_URL:-https://html.duckduckgo.com/html/?q=QUERY}
     volumes:
       - server-data:/data
+      - bit-analyze-data:/bit-analyze:ro
     depends_on:
       memoria: {condition: service_healthy}
       bdr-explorer: {condition: service_healthy}
