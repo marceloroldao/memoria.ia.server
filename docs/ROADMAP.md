@@ -58,13 +58,19 @@ Já implementado no V1:
 - trilha de auditoria append-only;
 - interface administrativa em `/devices`.
 
-Pendente para concluir a etapa:
-- autenticação própria do dispositivo;
-- challenge-response;
-- certificado interno Ed25519 assinado pelo servidor;
-- rotação/revogação de chaves e escopos por dispositivo.
+Também implementado no Device Authentication V1:
+- autenticação própria por challenge-response Ed25519;
+- certificado interno assinado pela autoridade do servidor;
+- token efêmero próprio para heartbeat;
+- suspensão/revogação invalidando autenticação imediatamente;
+- autoridade Ed25519 persistente e fail-closed.
 
-Referência: [Device Registry V1](DEVICE-REGISTRY-V1.md).
+Pendente para concluir a etapa:
+- rotação controlada de chaves do servidor e do dispositivo;
+- escopos aplicados por endpoint;
+- fluxo de enrollment/convite para OFF.IA.
+
+Referências: [Device Registry V1](DEVICE-REGISTRY-V1.md) e [Device Authentication V1](DEVICE-AUTH-V1.md).
 
 Objetivo: permitir que cada servidor administre seus próprios nós.
 

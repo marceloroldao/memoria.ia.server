@@ -76,11 +76,13 @@ Registro, aprovação, heartbeat, suspensão, reativação e revogação produze
 
 Campos com nomes associados a senha, segredo, API key, private key, token ou credential são redigidos antes da persistência do evento.
 
-## Próximo gate
+## Gate de autenticação
 
-1. challenge-response usando a chave pública cadastrada;
-2. certificado interno Ed25519 assinado pelo Server;
-3. token/certificado próprio para heartbeat, removendo dependência da sessão administrativa;
-4. rotação e revogação de chaves;
-5. escopos por dispositivo;
-6. integração MA2A somente depois desses contratos estarem estáveis.
+Challenge-response, certificado interno Ed25519 e heartbeat autenticado por token de dispositivo estão implementados no [Device Authentication V1](DEVICE-AUTH-V1.md).
+
+Próximos passos:
+1. rotação da chave da autoridade do servidor;
+2. rotação da chave pública do dispositivo;
+3. escopos efetivamente aplicados por endpoint;
+4. enrollment seguro por convite/QR;
+5. integração MA2A somente depois desses contratos estarem estáveis.
