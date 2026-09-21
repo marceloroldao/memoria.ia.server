@@ -321,10 +321,11 @@ async function formatBdr() {
 
 async function start() {
   try {
-    const [health, observation, probe] = await Promise.all([
+    const [health, observation, probe, serverCapabilities] = await Promise.all([
       fetch("/api/bdr-explorer/v1/health", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/bdr-explorer/v1/observation", { cache: "no-store" }).then((r) => r.json()),
       fetchSnapshot(0, 1),
+      fetch("/api/server/v1/capabilities", { cache: "no-store" }).then((r) => r.ok ? r.json() : ({})),
     ]);
     $("#health").textContent = health.status === "ok" ? "BDR conectado" : "estado desconhecido";
     $("#version").textContent = "BDR live";
@@ -334,7 +335,14 @@ async function start() {
     const initialOffset = Math.max(0, temporal.total - initialLimit);
     bindNavigation();
     $("#search").addEventListener("input", renderCurrent);
-    $("#format-bdr").addEventListener("click", formatBdr);
+    const formatButton = $("#format-bdr");
+    if (serverCapabilities.format_bdr === true) {
+      formatButton.addEventListener("click", formatBdr);
+    } else {
+      formatButton.disabled = true;
+      formatButton.title = "Aguardando contrato administrativo seguro do BDR";
+      formatButton.textContent = "Formatar BDR · indisponível";
+    }
     await loadWindow(initialOffset, initialLimit);
   } catch (error) {
     $("#health").textContent = "falha de conexão";
