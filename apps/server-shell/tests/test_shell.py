@@ -260,3 +260,24 @@ def test_device_structural_route_runs_before_admin_session_gate():
     assert handler.device_structural_memory.paths == [
         "/api/server/v1/device/memory/structural/resolve"
     ]
+
+
+
+def test_structural_bridge_config_is_available_from_environment(monkeypatch):
+    monkeypatch.setenv("MEMORIA_STRUCTURAL_BRIDGE_ENABLED", "false")
+    monkeypatch.setenv("MEMORIA_STRUCTURAL_BRIDGE_INTERVAL_SECONDS", "7.5")
+
+    config = ShellConfig.from_env()
+
+    assert config.structural_bridge_enabled is False
+    assert config.structural_bridge_interval_seconds == 7.5
+
+
+def test_structural_bridge_config_defaults_match_compose_contract(monkeypatch):
+    monkeypatch.delenv("MEMORIA_STRUCTURAL_BRIDGE_ENABLED", raising=False)
+    monkeypatch.delenv("MEMORIA_STRUCTURAL_BRIDGE_INTERVAL_SECONDS", raising=False)
+
+    config = ShellConfig.from_env()
+
+    assert config.structural_bridge_enabled is True
+    assert config.structural_bridge_interval_seconds == 5.0
