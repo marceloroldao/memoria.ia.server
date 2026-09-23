@@ -40,7 +40,7 @@ current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
 if [[ "$current_branch" != "main" ]]; then
   git switch main 2>/dev/null || git switch -c main --track origin/main
 fi
-git pull --ff-only origin main
+git pull --ff-only origin main origin main
 
 say "2/9 Salvando backup do .env"
 [[ -f .env ]] || die ".env não encontrado em $REPO_DIR"
