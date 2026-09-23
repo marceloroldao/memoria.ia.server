@@ -32,7 +32,15 @@ say "1/9 Atualizando memoria.ia.server"
 if ! git diff --quiet || ! git diff --cached --quiet; then
   die "há alterações locais no repositório. Faça commit/stash antes de continuar."
 fi
-git pull --ff-only
+# O servidor pode estar em detached HEAD após deploy por SHA. Volte para main
+# apenas se a árvore estiver limpa (checado acima), preserve o estado remoto e
+# então avance por fast-forward.
+git fetch origin main
+current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+if [[ "$current_branch" != "main" ]]; then
+  git switch main 2>/dev/null || git switch -c main --track origin/main
+fi
+git pull --ff-only origin main
 
 say "2/9 Salvando backup do .env"
 [[ -f .env ]] || die ".env não encontrado em $REPO_DIR"
