@@ -215,3 +215,48 @@ def test_format_bdr_clears_derived_state_only_after_upstream_success(monkeypatch
     assert handler.learner.reset_calls == 1
     assert handler.curiosity.actions == ["pause"]
     assert handler.curiosity.reset_calls == [True]
+
+
+
+def test_server_shell_imports_structural_observation_bridge():
+    assert server.StructuralObservationBridge.__name__ == "StructuralObservationBridge"
+
+
+def test_device_structural_route_runs_before_admin_session_gate():
+    handler = object.__new__(server.ShellHandler)
+    handler.path = "/api/server/v1/device/memory/structural/resolve"
+    handler.command = "POST"
+
+    class DeviceAuthStub:
+        def dispatch_public(self, _handler, _path):
+            return False
+
+        def dispatch_device(self, _handler, _path):
+            return False
+
+    class EnrollmentStub:
+        def dispatch_public(self, _handler, _path):
+            return False
+
+    class StructuralStub:
+        def __init__(self):
+            self.paths = []
+
+        def dispatch(self, _handler, path):
+            self.paths.append(path)
+            return True
+
+    class AdminAuthStub:
+        def verify(self, _token):
+            raise AssertionError("admin auth must not run for device structural routes")
+
+    handler.device_auth = DeviceAuthStub()
+    handler.enrollments = EnrollmentStub()
+    handler.device_structural_memory = StructuralStub()
+    handler.auth = AdminAuthStub()
+
+    server.ShellHandler._dispatch(handler)
+
+    assert handler.device_structural_memory.paths == [
+        "/api/server/v1/device/memory/structural/resolve"
+    ]
