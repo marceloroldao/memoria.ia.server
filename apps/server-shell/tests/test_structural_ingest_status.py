@@ -80,3 +80,70 @@ def test_structural_ingest_status_waits_before_first_checkpoint(tmp_path):
     assert result["status"] == "waiting"
     assert result["checkpoint"] is None
     assert result["recent_events"] == []
+
+
+def _write_structural_checkpoint(checkpoints, name, previous, source_id, relations, signatures):
+    events_name = f"events-{name}.jsonl"
+    rows = []
+    for sequence, (relation_ids, signature) in enumerate(zip(relations, signatures)):
+        rows.append(json.dumps({
+            "source_id": source_id,
+            "sequence": sequence,
+            "byte_offset": sequence * 16,
+            "byte_length": 16,
+            "trail": [1] + list(relation_ids),
+            "relation_ids": list(relation_ids),
+            "signature": signature,
+            "resolution": 2,
+        }))
+    (checkpoints / events_name).write_text("\n".join(rows) + "\n", encoding="utf-8")
+    payload = {
+        "schema": "bit-analyze-ingest-checkpoint/v2",
+        "hierarchy_id": "hierarchy:test",
+        "checkpoint_file": f"checkpoint-{name}.json",
+        "previous_checkpoint_file": previous,
+        "events_file": events_name,
+        "state_file": f"state-{name}.bin",
+        "cursor_offset": int(name),
+    }
+    (checkpoints / payload["checkpoint_file"]).write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+def test_source_novelty_uses_structural_ids_not_text_terms(tmp_path):
+    state = tmp_path / "bit"
+    checkpoints = state / "checkpoints"
+    checkpoints.mkdir(parents=True)
+    old = _write_structural_checkpoint(
+        checkpoints, "10", None, "web:old", [[256, 257], [258]], ["same-window", "old-window"]
+    )
+    current = _write_structural_checkpoint(
+        checkpoints, "20", old["checkpoint_file"], "web:new", [[256, 300], [301]], ["same-window", "new-window"]
+    )
+    (checkpoints / "current.json").write_text(json.dumps(current), encoding="utf-8")
+
+    result = StructuralIngestStatus(state).source_novelty("web:new")
+    assert result["status"] == "ready"
+    assert result["basis"] == "bit_analyze_structural_ids"
+    assert result["relation_ids"] == 3
+    assert result["relation_ids_seen_before"] == 1
+    assert result["signatures"] == 2
+    assert result["signatures_seen_before"] == 1
+    assert 0.5 < result["novelty"] < 0.67
+
+
+def test_source_novelty_is_pending_until_bit_analyze_has_source(tmp_path):
+    state = tmp_path / "bit"
+    checkpoints = state / "checkpoints"
+    checkpoints.mkdir(parents=True)
+    current = _write_structural_checkpoint(
+        checkpoints, "10", None, "web:other", [[256]], ["window"]
+    )
+    (checkpoints / "current.json").write_text(json.dumps(current), encoding="utf-8")
+
+    result = StructuralIngestStatus(state).source_novelty("web:not-yet-consumed")
+    assert result == {
+        "status": "pending",
+        "source_id": "web:not-yet-consumed",
+        "basis": "bit_analyze_structural_ids",
+    }
