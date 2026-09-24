@@ -27,7 +27,22 @@ STATE="$ROOT/state"
 mkdir -p "$SOURCE/objects/sha256" "$STATE/checkpoints"
 chmod -R a+rwx "$STATE"
 
-printf 'raw-web-structural-smoke-ABABABABABAB\n' > "$ROOT/body.bin"
+cat > "$ROOT/body.bin" <<'HTML'
+<!doctype html>
+<html>
+<head>
+  <title>Raw structural smoke</title>
+  <style>.hidden-marker{content:"STYLE-MUST-REACH-BIT-ANALYZE";}</style>
+  <script>window.__RAW_MARKER__="SCRIPT-MUST-REACH-BIT-ANALYZE";</script>
+</head>
+<body>
+  <nav>Menu Menu Menu</nav>
+  <article data-structural-marker="ATTRIBUTE-MUST-REACH-BIT-ANALYZE">
+    Full HTML body ABABABABABAB
+  </article>
+</body>
+</html>
+HTML
 SHA="$(sha256sum "$ROOT/body.bin" | awk '{print $1}')"
 BYTES="$(wc -c < "$ROOT/body.bin" | tr -d ' ')"
 PREFIX="$(printf '%s' "$SHA" | cut -c1-2)"
@@ -46,7 +61,7 @@ record = {
     "byte_offset": 0,
     "byte_length": int(size),
     "sha256": sha,
-    "content_type": "application/octet-stream",
+    "content_type": "text/html; charset=utf-8",
     "url": "https://example.invalid/smoke",
     "object_path": rel,
     "provenance": {
@@ -82,13 +97,16 @@ docker run --rm --network none \
     --chunk-size 3 \
     --layers 2
 
-python3 - "$STATE/checkpoints/current.json" "$STATE/checkpoints" <<'PY'
+python3 - "$STATE/checkpoints/current.json" "$STATE/checkpoints" "$ROOT/body.bin" <<'PY'
 import json, pathlib, sys
 pointer = pathlib.Path(sys.argv[1])
 root = pathlib.Path(sys.argv[2])
+raw_body = pathlib.Path(sys.argv[3]).read_bytes()
 data = json.loads(pointer.read_text(encoding="utf-8"))
 assert data["cursor_offset"] > 0
 assert data["record_count"] == 1
+assert data["sources"][0]["content_type"] == "text/html; charset=utf-8"
+assert data["sources"][0]["byte_length"] == len(raw_body)
 state = root / data["state_file"]
 events = root / data["events_file"]
 assert state.is_file() and state.stat().st_size > 0
@@ -96,8 +114,13 @@ rows = [json.loads(x) for x in events.read_text(encoding="utf-8").splitlines() i
 assert rows
 assert all(row["source_id"] == "web:deployment-smoke" for row in rows)
 assert rows[0]["byte_offset"] == 0
-assert rows[0]["byte_length"] > 0
-print(f"bit.analyze pipeline smoke PASS events={len(rows)} cursor={data['cursor_offset']}")
+assert sum(int(row["byte_length"]) for row in rows) == len(raw_body)
+assert rows[-1]["byte_offset"] + rows[-1]["byte_length"] == len(raw_body)
+assert all(rows[i]["byte_offset"] < rows[i + 1]["byte_offset"] for i in range(len(rows) - 1))
+print(
+    "full HTML -> bit.analyze gate PASS "
+    f"bytes={len(raw_body)} events={len(rows)} cursor={data['cursor_offset']}"
+)
 PY
 
 
