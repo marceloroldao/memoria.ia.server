@@ -25,6 +25,7 @@ The Server currently enforces:
 - `POST /api/server/v1/device/heartbeat` -> `device.heartbeat`
 - `POST /api/server/v1/device/memory/structural/observe` -> `memory.sync`
 - `POST /api/server/v1/device/memory/structural/resolve` -> `memory.sync`
+- `POST /api/server/v1/device/observations/npc-episodes` -> `memory.sync` + `world.connect` + approved server-device world binding
 
 The structural text memory facade is device-scoped. The Server derives the
 Memoria.ia `hierarchy_id`, `source_id` and `source_kind` from the
